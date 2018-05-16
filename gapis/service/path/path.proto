@@ -60,6 +60,7 @@ message Any {
     StateTreeNode state_tree_node = 32;
     StateTreeNodeForPath state_tree_node_for_path = 33;
     Thumbnail thumbnail = 34;
+    Stats stats = 35;
   }
 }
 
@@ -454,4 +455,9 @@ message Thumbnail {
   }
 
   bool disable_optimization = 7;
+}
+
+message Stats {
+    Capture capture = 1;
+    // Assume that its draw call stats for now
 }

@@ -138,6 +138,7 @@ cmd void vkCmdBindVertexBuffers(
 }
 
 
+
 sub void dovkCmdDraw(ref!vkCmdDrawArgs draw) {
   readWriteMemoryInBoundGraphicsDescriptorSets()
   readMemoryInCurrentPipelineBoundVertexBuffers(draw.VertexCount, draw.InstanceCount, draw.FirstVertex, draw.FirstInstance)
@@ -147,6 +148,7 @@ sub void dovkCmdDraw(ref!vkCmdDrawArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDraw(
     VkCommandBuffer commandBuffer,
     u32             vertexCount,
@@ -171,6 +173,7 @@ vkCmdDrawIndexedArgs {
   s32 VertexOffset
   u32 FirstInstance
 }
+
 
 sub void dovkCmdDrawIndexed(ref!vkCmdDrawIndexedArgs draw) {
   // Loop through the index buffer, and find the low and high
@@ -198,6 +201,7 @@ sub void dovkCmdDrawIndexed(ref!vkCmdDrawIndexedArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDrawIndexed(
     VkCommandBuffer commandBuffer,
     u32             indexCount,
@@ -228,6 +232,7 @@ cmd void vkCmdDrawIndexed(
   u32          Stride
 }
 
+
 sub void dovkCmdDrawIndirect(ref!vkCmdDrawIndirectArgs draw) {
   if draw.DrawCount > 0 {
     readWriteMemoryInBoundGraphicsDescriptorSets()
@@ -243,6 +248,7 @@ sub void dovkCmdDrawIndirect(ref!vkCmdDrawIndirectArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDrawIndirect(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
@@ -267,6 +273,7 @@ cmd void vkCmdDrawIndirect(
   u32          Stride
 }
 
+
 sub void dovkCmdDrawIndexedIndirect(ref!vkCmdDrawIndexedIndirectArgs draw) {
   if draw.DrawCount > 0 {
     readWriteMemoryInBoundGraphicsDescriptorSets()
@@ -285,6 +292,7 @@ sub void dovkCmdDrawIndexedIndirect(ref!vkCmdDrawIndexedIndirectArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDrawIndexedIndirect(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
@@ -308,12 +316,14 @@ cmd void vkCmdDrawIndexedIndirect(
   u32 GroupCountZ
 }
 
+
 sub void dovkCmdDispatch(ref!vkCmdDispatchArgs args) {
   readWriteMemoryInBoundComputeDescriptorSets()
 }
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDispatch(
     VkCommandBuffer commandBuffer,
     u32             groupCountX,
@@ -336,6 +346,7 @@ class vkCmdDispatchIndirectArgs {
   VkDeviceSize Offset
 }
 
+
 sub void dovkCmdDispatchIndirect(ref!vkCmdDispatchIndirectArgs dispatch) {
   command_size := as!VkDeviceSize(12)
   readMemoryInBuffer(Buffers[dispatch.Buffer], dispatch.Offset, command_size)
@@ -344,6 +355,7 @@ sub void dovkCmdDispatchIndirect(ref!vkCmdDispatchIndirectArgs dispatch) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDispatchIndirect(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
