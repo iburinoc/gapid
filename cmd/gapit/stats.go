@@ -114,6 +114,62 @@ func (verb *infoVerb) getEventsInRange(ctx context.Context, client service.Servi
 	return events[begin:end], nil
 }
 
+type aggregateStats struct {
+	average float64
+	stddev  float64
+	median  int
+}
+
+func computeStats(values []int) aggregateStats {
+	if len(values) == 0 {
+		return aggregateStats{}
+	}
+	total, total2 := 0, 0
+
+	sort.Ints(values)
+
+	for _, v := range values {
+		total += v
+		total2 += v * v
+	}
+
+	n := float64(len(values))
+	avg, avg2 := float64(total)/n, float64(total2)/n
+	return aggregateStats{
+		average: avg,
+		stddev:  math.Sqrt(avg2 - avg*avg),
+		median:  values[len(values)/2],
+	}
+
+}
+
+func callsPerFrame(events []*service.Event) aggregateStats {
+	frameIndices := []uint64{}
+	for _, e := range events {
+		if e.Kind == service.EventKind_FirstInFrame {
+			frameIndices = append(frameIndices, e.Command.Indices[0])
+		}
+	}
+	frameIndices = append(frameIndices, math.MaxUint64)
+
+	counts := []int{}
+	frame := 0
+	since := 0
+	for _, e := range events {
+		for frame+1 < len(frameIndices) && e.Command.Indices[0] >= frameIndices[frame+1] {
+			counts = append(counts, since)
+			since = 0
+			frame = frame + 1
+		}
+		if e.Kind == service.EventKind_AllCommands {
+			since = since + 1
+		}
+	}
+	counts = append(counts, since)
+
+	return computeStats(counts)
+}
+
 func (verb *infoVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	client, capture, err := loadCapture(ctx, flags, verb.Gapis)
 	if err != nil {
