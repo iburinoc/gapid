@@ -17,23 +17,67 @@ package resolve
 import (
 	"context"
 
+	"github.com/google/gapid/gapis/api"
 	"github.com/google/gapid/gapis/service"
 	"github.com/google/gapid/gapis/service/path"
 )
 
-// Events resolves and returns the event list from the path p.
+// Stats resolves and returns the stats list from the path p.
 func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
-	_, err := SyncData(ctx, p.Capture)
+	d, err := SyncData(ctx, p.Capture)
 	if err != nil {
 		return nil, err
 	}
 
+	// Get the vkQueuePresentKHR's
+	events, err := Events(ctx, &path.Events{
+		LastInFrame: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	drawsPerFrame := make([]uint64, len(events.List))
+
+	drawsSinceLastFrame := uint64(0)
+	processed := api.CmdIDSet{}
+
+	var process func(id api.CmdID)
+	process = func(id api.CmdID) {
+		if processed.Contains(id) {
+			return
+		}
+		processed.Add(id)
+
+		deps, ok := d.SyncDependencies[id]
+		if ok {
+			for _, dep := range deps {
+				process(dep)
+			}
+		}
+	}
+
+	hostSyncIdx := 0
+	for i, event := range events.List {
+		id := api.CmdID(event.Command.Indices[0])
+		// Need to get to the present call
+		for d.HostSyncBarriers[hostSyncIdx] < id {
+			process(d.HostSyncBarriers[hostSyncIdx])
+			hostSyncIdx++
+		}
+		process(id)
+		drawsPerFrame[i] = drawsSinceLastFrame
+		drawsSinceLastFrame = uint64(0)
+	}
+
+	constants := make([]*service.Constant, len(drawsPerFrame))
+	for i, val := range drawsPerFrame {
+		constants[i] = &service.Constant{
+			Value: val,
+		}
+	}
+
 	return &service.ConstantSet{
-		Constants: []*service.Constant{
-			&service.Constant{
-				Name:  "test",
-				Value: uint64(42),
-			},
-		},
+		Constants: constants,
 	}, nil
 }

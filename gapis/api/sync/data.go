@@ -65,6 +65,14 @@ type Data struct {
 	// indexed by the immediate parent of the subcommands in the group.
 	// e.g.: group: [73, 1, 4, 5~6] should be indexed by [73, 1, 4]
 	SubCommandMarkerGroups *subCommandMarkerGroupTrie
+	// SyncDependencies contains the commands that must complete
+	// (according to their fences or semaphores) before they can be executed.
+	SyncDependencies map[api.CmdID]SynchronizationIndices
+	// HostSyncBarriers are commands that will not return control to the
+	// host before they (and so their dependencies) complete.
+	// This means any command run after a "host sync barrier" can assume
+	// all of the dependencies of the barrier were executed.
+	HostSyncBarriers SynchronizationIndices
 }
 
 type subCommandMarkerGroupTrie struct {
@@ -95,6 +103,8 @@ func NewData() *Data {
 		SubcommandGroups:       map[api.CmdID][]api.SubCmdIdx{},
 		Hidden:                 api.CmdIDSet{},
 		SubCommandMarkerGroups: &subCommandMarkerGroupTrie{},
+		SyncDependencies:       map[api.CmdID]SynchronizationIndices{},
+		HostSyncBarriers:       SynchronizationIndices{},
 	}
 }
 

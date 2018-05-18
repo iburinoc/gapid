@@ -379,10 +379,10 @@ func (API) ResolveSynchronization(ctx context.Context, d *sync.Data, c *path.Cap
 		}
 	}
 
-	return FenceSync(ctx, d, c)
+	return dependencySync(ctx, d, c)
 }
 
-func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
+func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 	st, err := capture.NewState(ctx)
 	if err != nil {
 		return err
@@ -396,8 +396,8 @@ func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 
 	l := st.MemoryLayout
 
-	depends := map[api.CmdID][]api.CmdID{}
-	hostBarriers := []api.CmdID{}
+	depends := map[api.CmdID]sync.SynchronizationIndices{}
+	hostBarriers := sync.SynchronizationIndices{}
 
 	semSignaler := map[VkSemaphore]api.CmdID{}
 	semDepend := func(id api.CmdID, sem VkSemaphore) {
@@ -425,7 +425,7 @@ func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 	}
 
 	queueSubmits := map[VkQueue][]api.CmdID{}
-	deviceQueues := map[VkDevice]map[VkQueue]bool{}
+	deviceQueues := map[VkDevice]map[VkQueue]struct{}{}
 	addSubmit := func(id api.CmdID, queue VkQueue, device VkDevice) {
 		qs, qok := queueSubmits[queue]
 		if !qok {
@@ -434,22 +434,23 @@ func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 		queueSubmits[queue] = append(qs, id)
 		_, dok := deviceQueues[device]
 		if !dok {
-			deviceQueues[device] = map[VkQueue]bool{}
+			deviceQueues[device] = map[VkQueue]struct{}{}
 		}
-		deviceQueues[device][queue] = true
+		deviceQueues[device][queue] = struct{}{}
 	}
 	clearQueue := func(id api.CmdID, queue VkQueue) {
 		qs, ok := queueSubmits[queue]
-		if qok {
+		if ok {
 			delete(queueSubmits, queue)
-			val, ok := depends[depender]
+			val, ok := depends[id]
 			if !ok {
-				val := []api.CmdID{}
+				val = []api.CmdID{}
 			}
-			depends[depender] = append(val, qs...)
+			depends[id] = append(val, qs...)
 		}
 	}
 
+	// FIXME: figure out how queue submits interact with each other
 	api.ForeachCmd(ctx, cmds, func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
 		// only track the commands that do anything
 		if err := cmd.Mutate(ctx, id, st, nil); err != nil {
@@ -484,7 +485,6 @@ func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 			device := state.Queues().Get(queue).data.device
 			addSubmit(id, queue, device)
 		case *VkQueuePresentKHR:
-			// We want to work backward from here
 			info := c.PPresentInfo().Slice(uint64(0), uint64(1), l).MustRead(ctx, cmd, st, nil)[0]
 			waitSems := info.PWaitSemaphores().Slice(
 				uint64(0),
@@ -525,13 +525,15 @@ func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 			}
 		case *VkQueueWaitIdle:
 			clearQueue(id, c.Queue())
+			hostBarriers = append(hostBarriers, id)
 		case *VkDeviceWaitIdle:
 			queues, ok := deviceQueues[c.Device()]
 			if ok {
-				for _, q := range queues {
+				for q := range queues {
 					clearQueue(id, q)
 				}
 			}
+			hostBarriers = append(hostBarriers, id)
 		}
 		return nil
 	})
@@ -542,11 +544,15 @@ func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
-	for _, k := range keys {
-		fmt.Println(k, depends[k])
-	}
-	fmt.Println(hostBarriers)
+	/*
+		for _, k := range keys {
+			fmt.Println(k, depends[k])
+		}
+		fmt.Println(hostBarriers)
+	*/
 
+	d.SyncDependencies = depends
+	d.HostSyncBarriers = hostBarriers
 	return nil
 }
 
