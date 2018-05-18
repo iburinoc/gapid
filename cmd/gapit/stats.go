@@ -206,5 +206,20 @@ func (verb *infoVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	fmt.Printf("Stddev commands per frame:  %.2f\n", callStats.Stddev)
 	fmt.Println("Median commands per frame: ", callStats.Median)
 
+	return screwAroundWithSynchronizationData(ctx, client, capture)
+
 	return err
+}
+
+func screwAroundWithSynchronizationData(ctx context.Context, client service.Service, capture *path.Capture) error {
+	res, err := client.Get(ctx, (&path.Stats{
+		Capture: capture,
+	}).Path())
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(res)
+
+	return nil
 }

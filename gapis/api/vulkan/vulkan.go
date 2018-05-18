@@ -17,6 +17,7 @@ package vulkan
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/google/gapid/core/log"
 	"github.com/google/gapid/gapis/api"
@@ -377,6 +378,174 @@ func (API) ResolveSynchronization(ctx context.Context, d *sync.Data, c *path.Cap
 			}
 		}
 	}
+
+	return FenceSync(ctx, d, c)
+}
+
+func FenceSync(ctx context.Context, d *sync.Data, c *path.Capture) error {
+	st, err := capture.NewState(ctx)
+	if err != nil {
+		return err
+	}
+	cmds, err := resolve.Cmds(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	state := GetState(st)
+
+	l := st.MemoryLayout
+
+	depends := map[api.CmdID][]api.CmdID{}
+	hostBarriers := []api.CmdID{}
+
+	semSignaler := map[VkSemaphore]api.CmdID{}
+	semDepend := func(id api.CmdID, sem VkSemaphore) {
+		signaler, ok := semSignaler[sem]
+		if signaler != id && ok {
+			val, ok := depends[id]
+			if !ok {
+				val = []api.CmdID{}
+			}
+			depends[id] = append(val, signaler)
+			delete(semSignaler, sem)
+		}
+	}
+
+	fenceSignaler := map[VkFence]api.CmdID{}
+	fenceDepend := func(id api.CmdID, fence VkFence) {
+		signaler, ok := fenceSignaler[fence]
+		if signaler != id && ok {
+			val, ok := depends[id]
+			if !ok {
+				val = []api.CmdID{}
+			}
+			depends[id] = append(val, signaler)
+		}
+	}
+
+	queueSubmits := map[VkQueue][]api.CmdID{}
+	deviceQueues := map[VkDevice]map[VkQueue]bool{}
+	addSubmit := func(id api.CmdID, queue VkQueue, device VkDevice) {
+		qs, qok := queueSubmits[queue]
+		if !qok {
+			qs = []api.CmdID{}
+		}
+		queueSubmits[queue] = append(qs, id)
+		_, dok := deviceQueues[device]
+		if !dok {
+			deviceQueues[device] = map[VkQueue]bool{}
+		}
+		deviceQueues[device][queue] = true
+	}
+	clearQueue := func(id api.CmdID, queue VkQueue) {
+		qs, ok := queueSubmits[queue]
+		if qok {
+			delete(queueSubmits, queue)
+			val, ok := depends[depender]
+			if !ok {
+				val := []api.CmdID{}
+			}
+			depends[depender] = append(val, qs...)
+		}
+	}
+
+	api.ForeachCmd(ctx, cmds, func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
+		// only track the commands that do anything
+		if err := cmd.Mutate(ctx, id, st, nil); err != nil {
+			panic(err)
+		}
+		switch c := cmd.(type) {
+		case *VkQueueSubmit:
+			// FIXME: events can get in the way here, also need to treat each submit separately
+			submitCount := uint64(c.SubmitCount())
+			submits := c.PSubmits().Slice(uint64(0), submitCount, l).MustRead(ctx, cmd, st, nil)
+			for _, s := range submits {
+				waitSems := s.PWaitSemaphores().Slice(
+					uint64(0),
+					uint64(s.WaitSemaphoreCount()), l).
+					MustRead(ctx, cmd, st, nil)
+				for _, s := range waitSems {
+					semDepend(id, s)
+				}
+				sigSems := s.PSignalSemaphores().Slice(
+					uint64(0),
+					uint64(s.WaitSemaphoreCount()), l).
+					MustRead(ctx, cmd, st, nil)
+				for _, s := range sigSems {
+					semSignaler[s] = id
+				}
+			}
+			fence := c.Fence()
+			if fence != VkFence(0) {
+				fenceSignaler[fence] = id
+			}
+			queue := c.Queue()
+			device := state.Queues().Get(queue).data.device
+			addSubmit(id, queue, device)
+		case *VkQueuePresentKHR:
+			// We want to work backward from here
+			info := c.PPresentInfo().Slice(uint64(0), uint64(1), l).MustRead(ctx, cmd, st, nil)[0]
+			waitSems := info.PWaitSemaphores().Slice(
+				uint64(0),
+				uint64(info.WaitSemaphoreCount()),
+				l).MustRead(ctx, cmd, st, nil)
+			for _, s := range waitSems {
+				semDepend(id, s)
+			}
+		case *VkCreateFence:
+			signaledBit := VkFenceCreateFlags(VkFenceCreateFlagBits_VK_FENCE_CREATE_SIGNALED_BIT)
+			signaled := ((c.PCreateInfo().
+				Slice(uint64(0), uint64(1), l).
+				MustRead(ctx, cmd, st, nil)[0].
+				Flags()) & signaledBit) == signaledBit
+			if signaled {
+				fence := c.PFence().Slice(uint64(0), uint64(1), l).MustRead(ctx, cmd, st, nil)[0]
+				fenceSignaler[fence] = id
+			}
+		case *VkGetFenceStatus:
+			if c.Result() == VkResult_VK_SUCCESS {
+				fenceDepend(id, c.Fence())
+				hostBarriers = append(hostBarriers, id)
+			}
+		case *VkWaitForFences:
+			fenceCount := uint64(c.FenceCount())
+			if fenceCount == 1 || c.WaitAll() != VkBool32(0) {
+				// We can be sure all the fences were signaled
+				fences := c.PFences().Slice(uint64(0), fenceCount, l).MustRead(ctx, cmd, st, nil)
+				for _, f := range fences {
+					fenceDepend(id, f)
+				}
+				hostBarriers = append(hostBarriers, id)
+			}
+		case *VkResetFences:
+			fences := c.PFences().Slice(uint64(0), uint64(c.FenceCount()), l).MustRead(ctx, cmd, st, nil)
+			for _, f := range fences {
+				delete(fenceSignaler, f)
+			}
+		case *VkQueueWaitIdle:
+			clearQueue(id, c.Queue())
+		case *VkDeviceWaitIdle:
+			queues, ok := deviceQueues[c.Device()]
+			if ok {
+				for _, q := range queues {
+					clearQueue(id, q)
+				}
+			}
+		}
+		return nil
+	})
+
+	keys := make([]api.CmdID, 0, len(depends))
+	for k := range depends {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	for _, k := range keys {
+		fmt.Println(k, depends[k])
+	}
+	fmt.Println(hostBarriers)
 
 	return nil
 }
