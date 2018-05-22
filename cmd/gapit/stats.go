@@ -219,6 +219,19 @@ func screwAroundWithSynchronizationData(ctx context.Context, client service.Serv
 		return err
 	}
 
+	constants := res.(*service.ConstantSet)
+	fmt.Println(res)
+	for _, val := range constants.Constants {
+		fmt.Println(val.Value)
+	}
+
+	res, err = client.Get(ctx, (&path.Command{
+		Capture: capture,
+		Indices: []uint64{422, 0, 0, 5},
+	}).Path())
+	if err != nil {
+		return err
+	}
 	fmt.Println(res)
 
 	return nil

@@ -544,13 +544,6 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
-	/*
-		for _, k := range keys {
-			fmt.Println(k, depends[k])
-		}
-		fmt.Println(hostBarriers)
-	*/
-
 	d.SyncDependencies = depends
 	d.HostSyncBarriers = hostBarriers
 	return nil
