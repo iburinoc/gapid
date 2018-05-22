@@ -170,7 +170,7 @@ func callsPerFrame(events []*service.Event) aggregateStats {
 	return computeStats(counts)
 }
 
-func drawCallsPerFrame(ctx context.Context, client service.Service, capture *path.Capture) (aggregateStats, error) {
+func (verb *infoVerb) drawCallsPerFrame(ctx context.Context, client service.Service, capture *path.Capture) (aggregateStats, error) {
 	res, err := client.Get(ctx, (&path.Stats{
 		Capture: capture,
 	}).Path())
@@ -182,6 +182,13 @@ func drawCallsPerFrame(ctx context.Context, client service.Service, capture *pat
 	counts := make([]int, len(constants))
 	for i, val := range constants {
 		counts[i] = int(val.Value)
+	}
+
+	if verb.Frames.Start <= len(counts) {
+		counts = counts[verb.Frames.Start:]
+	}
+	if verb.Frames.Count >= 0 && verb.Frames.Count < len(counts) {
+		counts = counts[:verb.Frames.Count]
 	}
 
 	return computeStats(counts), nil
@@ -215,7 +222,8 @@ func (verb *infoVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	}
 
 	callStats := callsPerFrame(events)
-	drawStats, err := drawCallsPerFrame(ctx, client, capture)
+
+	drawStats, err := verb.drawCallsPerFrame(ctx, client, capture)
 	if err != nil {
 		return err
 	}

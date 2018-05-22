@@ -143,21 +143,6 @@ func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
 		}
 	}
 
-	/*
-		keys := d.SortedKeys()
-		for _, k := range keys {
-			fmt.Println(k)
-			/*
-				for _, val := range d.SubcommandReferences[k] {
-					fmt.Println("\t", val)
-				}
-			fmt.Println("\t", d.CommandRanges[k].LastIndex)
-			for k, val := range d.CommandRanges[k].Ranges {
-				fmt.Println("\t", k, val)
-			}
-		}
-	*/
-
 	return &service.ConstantSet{
 		Constants: constants,
 	}, nil
