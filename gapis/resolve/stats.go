@@ -99,7 +99,7 @@ func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
 				if err != nil {
 					return err
 				}
-				if subcmd.CmdFlags(ctx, id, nil).IsDrawCall() {
+				if subcmd.CmdFlags(ctx, id, nil).IsExecutedDraw() {
 					drawsSinceLastFrame++
 				}
 			}

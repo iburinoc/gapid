@@ -59,6 +59,7 @@ sub void dovkCmdBindIndexBuffer(ref!vkCmdBindIndexBufferArgs buffer) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdBindIndexBuffer(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
@@ -104,6 +105,7 @@ sub void dovkCmdBindVertexBuffers(ref!vkCmdBindVertexBuffersArgs bind) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdBindVertexBuffers(
     VkCommandBuffer     commandBuffer,
     u32                 firstBinding,
@@ -138,7 +140,7 @@ cmd void vkCmdBindVertexBuffers(
 }
 
 
-@draw_call
+
 sub void dovkCmdDraw(ref!vkCmdDrawArgs draw) {
   readWriteMemoryInBoundGraphicsDescriptorSets()
   readMemoryInCurrentPipelineBoundVertexBuffers(draw.VertexCount, draw.InstanceCount, draw.FirstVertex, draw.FirstInstance)
@@ -148,6 +150,7 @@ sub void dovkCmdDraw(ref!vkCmdDrawArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDraw(
     VkCommandBuffer commandBuffer,
     u32             vertexCount,
@@ -173,7 +176,7 @@ vkCmdDrawIndexedArgs {
   u32 FirstInstance
 }
 
-@draw_call
+
 sub void dovkCmdDrawIndexed(ref!vkCmdDrawIndexedArgs draw) {
   // Loop through the index buffer, and find the low and high
   // vertices. Then read all of the applicable vertex buffers.
@@ -200,6 +203,7 @@ sub void dovkCmdDrawIndexed(ref!vkCmdDrawIndexedArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDrawIndexed(
     VkCommandBuffer commandBuffer,
     u32             indexCount,
@@ -230,7 +234,7 @@ cmd void vkCmdDrawIndexed(
   u32          Stride
 }
 
-@draw_call
+
 sub void dovkCmdDrawIndirect(ref!vkCmdDrawIndirectArgs draw) {
   if draw.DrawCount > 0 {
     readWriteMemoryInBoundGraphicsDescriptorSets()
@@ -246,6 +250,7 @@ sub void dovkCmdDrawIndirect(ref!vkCmdDrawIndirectArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDrawIndirect(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
@@ -270,7 +275,7 @@ cmd void vkCmdDrawIndirect(
   u32          Stride
 }
 
-@draw_call
+
 sub void dovkCmdDrawIndexedIndirect(ref!vkCmdDrawIndexedIndirectArgs draw) {
   if draw.DrawCount > 0 {
     readWriteMemoryInBoundGraphicsDescriptorSets()
@@ -289,6 +294,7 @@ sub void dovkCmdDrawIndexedIndirect(ref!vkCmdDrawIndexedIndirectArgs draw) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDrawIndexedIndirect(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
@@ -312,13 +318,14 @@ cmd void vkCmdDrawIndexedIndirect(
   u32 GroupCountZ
 }
 
-@draw_call
+
 sub void dovkCmdDispatch(ref!vkCmdDispatchArgs args) {
   readWriteMemoryInBoundComputeDescriptorSets()
 }
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDispatch(
     VkCommandBuffer commandBuffer,
     u32             groupCountX,
@@ -341,7 +348,7 @@ class vkCmdDispatchIndirectArgs {
   VkDeviceSize Offset
 }
 
-@draw_call
+
 sub void dovkCmdDispatchIndirect(ref!vkCmdDispatchIndirectArgs dispatch) {
   command_size := as!VkDeviceSize(12)
   readMemoryInBuffer(Buffers[dispatch.Buffer], dispatch.Offset, command_size)
@@ -350,6 +357,7 @@ sub void dovkCmdDispatchIndirect(ref!vkCmdDispatchIndirectArgs dispatch) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
+@executed_draw
 cmd void vkCmdDispatchIndirect(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
