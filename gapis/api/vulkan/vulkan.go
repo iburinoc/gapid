@@ -458,28 +458,63 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 		}
 		switch c := cmd.(type) {
 		case *VkQueueSubmit:
-			// FIXME: events can get in the way here, also need to treat each submit separately
 			submitCount := uint64(c.SubmitCount())
 			submits := c.PSubmits().Slice(uint64(0), submitCount, l).MustRead(ctx, cmd, st, nil)
-			for _, s := range submits {
+
+			type commandExecutor struct {
+				lastIdx  api.SubCmdIdx
+				executor api.CmdID
+			}
+			executors := make([]commandExecutor, 0,
+				len(d.CommandRanges[id].Ranges))
+			for executor, lastIdx := range d.CommandRanges[id].Ranges {
+				executors = append(executors, commandExecutor{
+					lastIdx:  lastIdx,
+					executor: executor,
+				})
+			}
+			sort.Slice(executors, func(i, j int) bool {
+				return executors[i].lastIdx.LessThan(executors[j].lastIdx)
+			})
+
+			excIdx := 0
+
+			subcmds := d.SubcommandReferences[id]
+			submitFirstIdx := 0
+			for i, s := range submits {
+				first := subcmds[submitFirstIdx].Index
+
+				for excIdx < len(executors) && executors[excIdx].lastIdx.LessThan(first) {
+					excIdx++
+				}
 				waitSems := s.PWaitSemaphores().Slice(
 					uint64(0),
 					uint64(s.WaitSemaphoreCount()), l).
 					MustRead(ctx, cmd, st, nil)
 				for _, s := range waitSems {
-					semDepend(id, s)
+					semDepend(executors[excIdx].executor, s)
+				}
+
+				for submitFirstIdx < len(subcmds) && subcmds[submitFirstIdx].Index[0] <= uint64(i) {
+					submitFirstIdx++
+				}
+
+				last := subcmds[submitFirstIdx-1].Index
+				for excIdx < len(executors) && executors[excIdx].lastIdx.LessThan(last) {
+					excIdx++
 				}
 				sigSems := s.PSignalSemaphores().Slice(
 					uint64(0),
-					uint64(s.WaitSemaphoreCount()), l).
+					uint64(s.SignalSemaphoreCount()), l).
 					MustRead(ctx, cmd, st, nil)
 				for _, s := range sigSems {
-					semSignaler[s] = id
+					semSignaler[s] = executors[excIdx].executor
 				}
 			}
+
 			fence := c.Fence()
 			if fence != VkFence(0) {
-				fenceSignaler[fence] = id
+				fenceSignaler[fence] = executors[len(executors)-1].executor
 			}
 			queue := c.Queue()
 			device := state.Queues().Get(queue).data.device
@@ -537,12 +572,6 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 		}
 		return nil
 	})
-
-	keys := make([]api.CmdID, 0, len(depends))
-	for k := range depends {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
 	d.SyncDependencies = depends
 	d.HostSyncBarriers = hostBarriers

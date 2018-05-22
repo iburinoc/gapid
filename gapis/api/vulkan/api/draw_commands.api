@@ -59,7 +59,6 @@ sub void dovkCmdBindIndexBuffer(ref!vkCmdBindIndexBufferArgs buffer) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
-@executed_draw
 cmd void vkCmdBindIndexBuffer(
     VkCommandBuffer commandBuffer,
     VkBuffer        buffer,
@@ -105,7 +104,6 @@ sub void dovkCmdBindVertexBuffers(ref!vkCmdBindVertexBuffersArgs bind) {
 
 @threadSafety("app")
 @indirect("VkCommandBuffer", "VkDevice")
-@executed_draw
 cmd void vkCmdBindVertexBuffers(
     VkCommandBuffer     commandBuffer,
     u32                 firstBinding,

@@ -166,7 +166,7 @@ func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
 // Compute a map from command id's to the subcommands they will actually execute.
 // I.e. a vkSetEvent will list all subcommands from the queue it executed.
 func computeSubcmdExecutor(d *sync.Data) map[api.CmdID][][]uint64 {
-	type commandRange struct {
+	type commandExecutor struct {
 		lastIdx  api.SubCmdIdx
 		executor api.CmdID
 	}
@@ -176,26 +176,28 @@ func computeSubcmdExecutor(d *sync.Data) map[api.CmdID][][]uint64 {
 
 	for _, k := range keys {
 		subcmds := d.SubcommandReferences[k]
-		ranges := make([]commandRange, 0, len(d.CommandRanges[k].Ranges))
+		executors := make([]commandExecutor, 0, len(d.CommandRanges[k].Ranges))
 		for executor, lastIdx := range d.CommandRanges[k].Ranges {
-			ranges = append(ranges, commandRange{
+			executors = append(executors, commandExecutor{
 				lastIdx:  lastIdx,
 				executor: executor,
 			})
 		}
-		sort.Slice(ranges, func(i, j int) bool {
-			return ranges[i].lastIdx.LessThan(ranges[j].lastIdx)
+		sort.Slice(executors, func(i, j int) bool {
+			return executors[i].lastIdx.LessThan(executors[j].lastIdx)
 		})
 		// Make sure there's a (possibly empty) entry for the original
 		// command, so we can use that to distinguish it as a queue submit.
 		// We need to do this so it doesn't get counted as a draw call.
-		res[k] = [][]uint64{}
+		if _, ok := res[k]; !ok {
+			res[k] = [][]uint64{}
+		}
 		rangeIdx := 0
 		for _, val := range subcmds {
-			for ranges[rangeIdx].lastIdx.LessThan(val.Index) {
+			for executors[rangeIdx].lastIdx.LessThan(val.Index) {
 				rangeIdx++
 			}
-			executor := ranges[rangeIdx].executor
+			executor := executors[rangeIdx].executor
 			indices := append([]uint64{uint64(k)}, val.Index...)
 			val, ok := res[executor]
 			if !ok {

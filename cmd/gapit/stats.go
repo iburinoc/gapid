@@ -170,6 +170,23 @@ func callsPerFrame(events []*service.Event) aggregateStats {
 	return computeStats(counts)
 }
 
+func drawCallsPerFrame(ctx context.Context, client service.Service, capture *path.Capture) (aggregateStats, error) {
+	res, err := client.Get(ctx, (&path.Stats{
+		Capture: capture,
+	}).Path())
+	if err != nil {
+		return aggregateStats{}, err
+	}
+
+	constants := res.(*service.ConstantSet).Constants
+	counts := make([]int, len(constants))
+	for i, val := range constants {
+		counts[i] = int(val.Value)
+	}
+
+	return computeStats(counts), nil
+}
+
 func (verb *infoVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	client, capture, err := loadCapture(ctx, flags, verb.Gapis)
 	if err != nil {
@@ -196,43 +213,23 @@ func (verb *infoVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 			}
 		}
 	}
-	callStats := cmdsPerFrame.Stats()
 
-	fmt.Println("Commands:                  ", counts[service.EventKind_AllCommands])
-	fmt.Println("Frames:                    ", counts[service.EventKind_FirstInFrame])
-	fmt.Println("Draws:                     ", counts[service.EventKind_DrawCall])
-	fmt.Println("FBO:                       ", counts[service.EventKind_FramebufferObservation])
-	fmt.Printf("Avg commands per frame:     %.2f\n", callStats.Average)
-	fmt.Printf("Stddev commands per frame:  %.2f\n", callStats.Stddev)
-	fmt.Println("Median commands per frame: ", callStats.Median)
+	callStats := callsPerFrame(events)
+	drawStats, err := drawCallsPerFrame(ctx, client, capture)
+	if err != nil {
+		return err
+	}
 
-	return screwAroundWithSynchronizationData(ctx, client, capture)
+	fmt.Println("Commands:                    ", counts[service.EventKind_AllCommands])
+	fmt.Println("Frames:                      ", counts[service.EventKind_FirstInFrame])
+	fmt.Println("Draws:                       ", counts[service.EventKind_DrawCall])
+	fmt.Println("FBO:                         ", counts[service.EventKind_FramebufferObservation])
+	fmt.Printf("Avg commands per frame:       %.2f\n", callStats.average)
+	fmt.Printf("Stddev commands per frame:    %.2f\n", callStats.stddev)
+	fmt.Println("Median commands per frame:   ", callStats.median)
+	fmt.Printf("Avg draw calls per frame:     %.2f\n", drawStats.average)
+	fmt.Printf("Stddev draw calls per frame:  %.2f\n", drawStats.stddev)
+	fmt.Println("Median draw calls per frame: ", drawStats.median)
 
 	return err
-}
-
-func screwAroundWithSynchronizationData(ctx context.Context, client service.Service, capture *path.Capture) error {
-	res, err := client.Get(ctx, (&path.Stats{
-		Capture: capture,
-	}).Path())
-	if err != nil {
-		return err
-	}
-
-	constants := res.(*service.ConstantSet)
-	fmt.Println(res)
-	for _, val := range constants.Constants {
-		fmt.Println(val.Value)
-	}
-
-	res, err = client.Get(ctx, (&path.Command{
-		Capture: capture,
-		Indices: []uint64{422, 0, 0, 5},
-	}).Path())
-	if err != nil {
-		return err
-	}
-	fmt.Println(res)
-
-	return nil
 }
