@@ -227,6 +227,8 @@ func NewValue(v interface{}) *Value {
 		return &Value{&Value_ImageInfo{v}}
 	case *device.Instance:
 		return &Value{&Value_Device{v}}
+	case *Metrics:
+		return &Value{&Value_Metrics{v}}
 
 	default:
 		if v := box.NewValue(v); v != nil {

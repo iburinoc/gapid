@@ -87,13 +87,14 @@ message Value {
     Event event = 8;
     Events events = 9;
     Memory memory = 10;
-    path.Any path = 11;
-    Report report = 12;
-    Resources resources = 13;
-    StateTree state_tree = 14;
-    StateTreeNode state_tree_node = 15;
-    Thread thread = 16;
-    Threads threads = 17;
+    Metrics metrics = 11;
+    path.Any path = 12;
+    Report report = 13;
+    Resources resources = 14;
+    StateTree state_tree = 15;
+    StateTreeNode state_tree_node = 16;
+    Thread thread = 17;
+    Threads threads = 18;
 
     device.Instance device = 20;
 
@@ -669,6 +670,71 @@ message MemoryRange {
   uint64 base = 1;
   // The number of bytes that are in the memory range.
   uint64 size = 2;
+}
+
+message Metrics {
+  oneof metrics {
+    MemoryLayout memory_layout = 1;
+  }
+}
+
+// The description of the memory layout of the API state
+message MemoryLayout {
+  // The API ID used for this call.
+  path.API api = 1;
+  // The index to get the constants names for MemoryAllocation `flags`.
+  // A value of -1 indicates no flag names should be fetched.
+  int32 allocation_flags_index = 2;
+  // The memory allocations that are currently in use.
+  repeated MemoryAllocation allocations = 3;
+}
+
+// A single memory allocation
+message MemoryAllocation {
+  // The (TODO: logical or physical?) device this allocation was made on
+  uint64 device = 1;
+  // The memory type this allocation is from
+  uint32 memory_type = 2;
+  // Flags describing properties of the allocation, e.g. whether it's device
+  // local, whether it's host visible, etc.
+  uint32 flags = 3;
+  // Constant index for looking up the flag values with the path.ConstantSet endpoint
+  // The API handle for this allocation
+  uint64 handle = 4;
+  // This size of the memory allocated
+  uint64 size = 5;
+  // The regions of host memory this allocation has been mapped into
+  MemoryMapping mapping = 6;
+  // All buffers/images bound to this memory allocation
+  repeated MemoryBinding bindings = 7;
+}
+
+// A mapping from part of a memory allocation into host memory
+message MemoryMapping {
+  // The size in bytes of the mapping
+  uint64 size = 1;
+  // The offset of the mapping into the source allocation, in bytes
+  uint64 offset = 2;
+  // The address on the host that this memory is bound to
+  uint64 host_address = 3;
+}
+
+// A buffer/image that is bound to part of a memory allocation
+message MemoryBinding {
+  // The API specific handle for this allocation
+  uint64 handle = 1;
+
+  enum BindingType {
+    BUFFER = 0;
+    IMAGE = 1;
+  }
+  // Which type of object is using this memory
+  BindingType type = 2;
+
+  // The size of the object, in bytes
+  uint64 size = 3;
+  // The offset into the bound allocation, in bytes
+  uint64 offset = 4;
 }
 
 // UsageHints hints to the server the intended usage of the result of a request.
