@@ -188,6 +188,24 @@ func buildConstantSets(api *semantic.API, mappings *resolver.Mappings) *Constant
 			constsets[p] = b.addLabels(ev.Labels, ev.Ty.IsBitfield)
 		}
 	}
+	for _, e := range api.Enums {
+		unique := false
+		for _, annotation := range e.Annotations {
+			if annotation.Named == semantic.Named("unique") {
+				unique = true
+			}
+		}
+		if unique {
+			labels := analysis.Labels{}
+			for _, entry := range e.Entries {
+				// Assume the enums are uint32
+				if v, ok := entry.Value.(semantic.Uint32Value); ok {
+					labels[uint64(uint32(v))] = string(entry.Named)
+				}
+			}
+			constsets[e] = b.addLabels(labels, e.IsBitfield)
+		}
+	}
 
 	nl := nodeLabeler{
 		nodes: map[semantic.Node]analysis.Labels{},
