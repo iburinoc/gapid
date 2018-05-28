@@ -123,6 +123,7 @@ bitfield VkQueueFlagBits {
 }
 type VkFlags VkQueueFlags
 
+@unique
 bitfield VkMemoryPropertyFlagBits {
   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT     = 0x00000001,
   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT     = 0x00000002,
