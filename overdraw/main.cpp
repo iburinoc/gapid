@@ -895,7 +895,6 @@ class HelloTriangleApplication {
   }
 
   void createDescriptorSet() {
-    std::cerr << "Hello\n";
     VkDescriptorSetLayout layouts[] = {descriptorSetLayout};
     VkDescriptorSetAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -977,9 +976,6 @@ class HelloTriangleApplication {
         throw std::runtime_error("failed to begin recording command buffer");
       }
 
-      VkEvent events[] = {event};
-      vkCmdWaitEvents(commandBuffers[i], 1, events, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, nullptr, 0, nullptr, 0, nullptr);
-
       VkRenderPassBeginInfo renderPassInfo = {};
       renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
       renderPassInfo.renderPass = renderPass;
@@ -999,6 +995,8 @@ class HelloTriangleApplication {
       vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
       vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
       vkCmdDrawIndexed(commandBuffers[i], 6, 1, 0, 0, 0);
+      vkCmdSetEvent(commandBuffers[i], event, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
       vkCmdEndRenderPass(commandBuffers[i]);
       if (vkEndCommandBuffer(commandBuffers[i])  != VK_SUCCESS) {
         throw std::runtime_error("failed to record command buffer");
@@ -1021,8 +1019,6 @@ class HelloTriangleApplication {
       glfwPollEvents();
       updateUniformBuffer();
       drawFrame();
-      if (++count == 10000)
-        exit(1);
     }
 
     vkDeviceWaitIdle(device);
@@ -1078,7 +1074,22 @@ class HelloTriangleApplication {
     if (vkQueueSubmit(graphicsQueue, 2, submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
       throw std::runtime_error("failed to submit draw command buffer");
     }
-    vkSetEvent(device, event);
+    while (vkGetEventStatus(device, event) != VK_EVENT_SET);
+    void *dat;
+    vkMapMemory(device, storageBufferMemory, 0, VK_WHOLE_SIZE, 0, &dat);
+    uint32_t *data = (uint32_t*) dat;
+    uint32_t count = 0;
+    uint32_t max = 0;
+    for (uint32_t r = 0; r < HEIGHT; r++) {
+      for (uint32_t c = 0; c < WIDTH; c++) {
+        uint32_t idx = r * WIDTH + c;
+        if (data[idx] > max) max = data[idx];
+        count += data[idx];
+        data[idx] = 0;
+      }
+    }
+    std::cout << "max: " << max << " count: " << count << std::endl;
+    vkUnmapMemory(device, storageBufferMemory);
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
