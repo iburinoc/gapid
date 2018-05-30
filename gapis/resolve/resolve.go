@@ -298,6 +298,8 @@ func ResolveInternal(ctx context.Context, p path.Node) (interface{}, error) {
 		return Mesh(ctx, p)
 	case *path.Parameter:
 		return Parameter(ctx, p)
+	case *path.Overdraw:
+		return Overdraw(ctx, p)
 	case *path.Report:
 		return Report(ctx, p)
 	case *path.ResourceData:

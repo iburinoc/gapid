@@ -823,3 +823,6 @@ message StateTreeNode {
   // The possible alternative named values for the field.
   path.ConstantSet constants = 6;
 }
+
+message Overdraw {
+}

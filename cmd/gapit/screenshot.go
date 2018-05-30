@@ -108,6 +108,11 @@ func (verb *screenshotVerb) writeSingleFrame(frame image.Image, fn string) error
 }
 
 func getSingleFrame(ctx context.Context, cmd *path.Command, device *path.Device, client service.Service, noOpt bool) (*image.NRGBA, error) {
+	res, err := client.Get(ctx, (&path.Overdraw{cmd}).Path())
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(res)
 	ctx = log.V{"cmd": cmd.Indices}.Bind(ctx)
 	settings := &service.RenderSettings{MaxWidth: uint32(0xFFFFFFFF), MaxHeight: uint32(0xFFFFFFFF)}
 	iip, err := client.GetFramebufferAttachment(ctx,
