@@ -590,7 +590,7 @@ class HelloTriangleApplication {
 
     VkDescriptorSetLayoutCreateInfo layoutInfo = {};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 2;
+    layoutInfo.bindingCount = 1;
     layoutInfo.pBindings = bindings;
 
     if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
@@ -601,6 +601,54 @@ class HelloTriangleApplication {
   void createStorageBuffer() {
     VkDeviceSize size = static_cast<VkDeviceSize>(WIDTH * HEIGHT * sizeof(uint32_t));
     createBuffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, storageBuffer, storageBufferMemory);
+
+    VkDescriptorSetLayoutBinding binding = {};
+    binding.binding = 0;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    binding.descriptorCount = 1;
+    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    info.bindingCount = 1;
+    info.pBindings = &binding;
+
+    if (vkCreateDescriptorSetLayout(device, &info, nullptr, &storageBufferLayout) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create descriptor set layout for storage buffer");
+    }
+
+    VkDescriptorPoolCreateInfo pinfo = {};
+    pinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pinfo.maxSets = 1;
+    pinfo.poolSizeCount = 1;
+    VkDescriptorPoolSize psize = {};
+    psize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    psize.descriptorCount = 1;
+    pinfo.pPoolSizes = &psize;
+    if (vkCreateDescriptorPool(device, &pinfo, nullptr, &storageBufferPool) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create descriptor pool for storage buffer");
+    }
+
+    VkDescriptorSetAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = storageBufferPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &storageBufferLayout;
+    if (vkAllocateDescriptorSets(device, &allocInfo, &storageBufferSet) != VK_SUCCESS) {
+      throw std::runtime_error("failed to allocate descriptor set for storage buffer");
+    }
+
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = storageBufferSet;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    VkDescriptorBufferInfo binfo = {};
+    binfo.buffer = storageBuffer;
+    binfo.offset = 0;
+    binfo.range = VK_WHOLE_SIZE;
+    write.pBufferInfo = &binfo;
+    vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
   }
 
   void createGraphicsPipeline() {
@@ -693,8 +741,9 @@ class HelloTriangleApplication {
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = 2;
+    VkDescriptorSetLayout layouts[] = {descriptorSetLayout, storageBufferLayout};
+    pipelineLayoutInfo.pSetLayouts = layouts;
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
       throw std::runtime_error("failed to create pipeline layout");
@@ -880,14 +929,12 @@ class HelloTriangleApplication {
     VkDescriptorPoolSize poolSize[] = {{},{}};
     poolSize[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSize[0].descriptorCount = 1;
-    poolSize[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    poolSize[1].descriptorCount = 1;
 
     VkDescriptorPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 2;
+    poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = poolSize;
-    poolInfo.maxSets = 2;
+    poolInfo.maxSets = 1;
 
     if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
       throw std::runtime_error("failed to create descriptor pool");
@@ -927,12 +974,7 @@ class HelloTriangleApplication {
     descriptorWrite[0].pImageInfo = nullptr;
     descriptorWrite[0].pTexelBufferView = nullptr;
 
-    descriptorWrite[1] = descriptorWrite[0];
-    descriptorWrite[1].dstBinding = 1;
-    descriptorWrite[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptorWrite[1].pBufferInfo = &bufferInfo[1];
-
-    vkUpdateDescriptorSets(device, 2, descriptorWrite, 0, nullptr);
+    vkUpdateDescriptorSets(device, 1, descriptorWrite, 0, nullptr);
   }
 
   uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
@@ -993,11 +1035,12 @@ class HelloTriangleApplication {
       VkDeviceSize offsets[] = {0};
       vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
       vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
-      vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+      VkDescriptorSet sets[] = {descriptorSet, storageBufferSet};
+      vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, sets, 0, nullptr);
       vkCmdDrawIndexed(commandBuffers[i], 6, 1, 0, 0, 0);
-      vkCmdSetEvent(commandBuffers[i], event, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
       vkCmdEndRenderPass(commandBuffers[i]);
+      vkCmdSetEvent(commandBuffers[i], event, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
       if (vkEndCommandBuffer(commandBuffers[i])  != VK_SUCCESS) {
         throw std::runtime_error("failed to record command buffer");
       }
@@ -1144,8 +1187,10 @@ class HelloTriangleApplication {
     cleanupSwapChain();
 
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+    vkDestroyDescriptorPool(device, storageBufferPool, nullptr);
 
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, storageBufferLayout, nullptr);
 
     vkDestroyBuffer(device, vertexBuffer, nullptr);
     vkFreeMemory(device, vertexBufferMemory, nullptr);
@@ -1207,6 +1252,9 @@ class HelloTriangleApplication {
 
   VkBuffer storageBuffer;
   VkDeviceMemory storageBufferMemory;
+  VkDescriptorPool storageBufferPool;
+  VkDescriptorSet storageBufferSet;
+  VkDescriptorSetLayout storageBufferLayout;
 
   VkRenderPass renderPass;
   VkDescriptorSetLayout descriptorSetLayout;

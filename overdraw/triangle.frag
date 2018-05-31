@@ -4,7 +4,7 @@
 layout(location = 0) in vec3 fragColor;
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 1) buffer StorageBuffer
+layout(set = 1, binding = 0) buffer StorageBuffer
 {
 	uint values[];
 } written;
