@@ -275,6 +275,9 @@ class HelloTriangleApplication {
       }
     }
 
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(physicalDevice, &props);
+    std::cout << "max color attachments: " << props.limits.maxColorAttachments << std::endl;
     VkPhysicalDeviceFeatures features;
     vkGetPhysicalDeviceFeatures(physicalDevice, &features);
     std::cout << "fragmentStoresAndAtomics: " << features.fragmentStoresAndAtomics << std::endl;
@@ -420,6 +423,7 @@ class HelloTriangleApplication {
 
 
     VkPhysicalDeviceFeatures deviceFeatures = {};
+    deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
     VkDeviceCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
