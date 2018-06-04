@@ -14,11 +14,29 @@
  * limitations under the License.
  */
 
+#include "spv_manager.h"
 #include "libmanager.h"
 
 #include <stdint.h>
 #include <stdio.h>
 #include <vector>
+
+void overdraw_test(const std::vector<uint32_t> &spirv_binary) {
+  // TODO: build shaders
+  spvmanager::SpvManager manager(spirv_binary);
+
+  manager.addOverdrawStorageBuffer();
+
+  auto result = manager.getSpvBinary();
+  const char *dis_text = getDisassembleText(result.data(), result.size());
+  if (dis_text) {
+  	printf("%s\n", dis_text);
+  } else {
+    printf("Disassemble error.\n");
+    return;
+  }
+  deleteDisassembleText(dis_text);
+}
 
 int main(int argc, char* argv[]) {
 
@@ -47,6 +65,9 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "error: file does not exist '%s'\n", filename);
     return 1;
   }
+
+  overdraw_test(spirv_binary);
+  return 0;
 
   const char* dis_text = getDisassembleText(spirv_binary.data(), spirv_binary.size());
 

@@ -36,9 +36,11 @@ cc_test(
     srcs = [
         "disassemble_test.cpp",
     ],
-    args = ["$(location spirv_example.spv)"],
+    #    args = ["$(location spirv_example.spv)"],
+    args = ["$(location triangle.frag.spv)"],
     copts = cc_copts(),
-    data = ["spirv_example.spv"],
+    #data = ["spirv_example.spv"],
+    data = ["triangle.frag.spv"],
     deps = [
         ":cc",
     ],

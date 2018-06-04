@@ -92,6 +92,9 @@ class SpvManager {
   void removeLayoutLocations();
   void initLocals();
   void makeSpvDebuggable();
+
+  void addOverdrawStorageBuffer();
+
   std::vector<unsigned int> getSpvBinary();
   debug_instructions_t* getDebugInstructions();
 

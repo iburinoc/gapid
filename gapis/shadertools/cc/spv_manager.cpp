@@ -963,4 +963,49 @@ void SpvManager::appendDebugInstruction(std::vector<instruction_t>* debugs, Inst
   }
 }
 
+#include <stdio.h>
+void SpvManager::addOverdrawStorageBuffer() {
+  // def_use_mgr doesn't like forward declaring id's, so do it in this order
+  // Create types
+  uint32_t uint_type_id = addTypeInst(SpvOpTypeInt, {{32}, {0}});
+  uint32_t float_type_id = addTypeInst(SpvOpTypeFloat, {{32}});
+  uint32_t arr_type_id = addTypeInst(SpvOpTypeRuntimeArray, {{uint_type_id}});
+  uint32_t buffer_type_id = addTypeInst(SpvOpTypeStruct, {{uint_type_id, arr_type_id}});
+  uint32_t v2_type_id = addTypeInst(SpvOpTypeVector, {{float_type_id}, {2}});
+  uint32_t v4_type_id = addTypeInst(SpvOpTypeVector, {{float_type_id}, {4}});
+  uint32_t u2_type_id = addTypeInst(SpvOpTypeVector, {{uint_type_id}, {2}});
+
+  // Create variable
+  uint32_t storage = getUnique();
+  addVariable(buffer_type_id, storage, spv::StorageClassUniform);
+  uint32_t fragcoord = getUnique();
+  addVariable(v4_type_id, fragcoord, spv::StorageClassInput);
+
+  // Annotate the variables
+  context->AddAnnotationInst(makeInstruction(
+      SpvOpDecorate, 0, 0, {{buffer_type_id}, {SpvDecorationBufferBlock}}));
+  context->AddAnnotationInst(makeInstruction(
+      SpvOpMemberDecorate, 0, 0, {{buffer_type_id}, {0}, {SpvDecorationOffset, 0}}));
+  context->AddAnnotationInst(makeInstruction(
+      SpvOpMemberDecorate, 0, 0, {{buffer_type_id}, {1}, {SpvDecorationOffset, 4}}));
+
+  // FIXME: dynamically determine appropriate descriptor set
+  context->AddAnnotationInst(makeInstruction(
+      SpvOpDecorate, 0, 0, {{storage}, {SpvDecorationDescriptorSet, 1}}));
+  context->AddAnnotationInst(makeInstruction(
+      SpvOpDecorate, 0, 0, {{storage}, {SpvDecorationBinding, 0}}));
+  context->AddAnnotationInst(makeInstruction(
+      SpvOpDecorate, 0, 0, {{fragcoord}, {SpvDecorationBuiltIn, SpvBuiltInFragCoord}}));
+  // Add fragcoord to the entry points
+  printf("%d\n", SpvExecutionModelFragment);
+  for (auto &entry_point : context->module()->entry_points()) {
+    if (entry_point.GetOperand(0).words[0] == SpvExecutionModelFragment) {
+      entry_point.AddOperand(spvtools::ir::Operand(SPV_OPERAND_TYPE_ID,
+                                                   std::vector<uint32_t>{fragcoord}));
+    }
+  }
+
+  // FIXME: Add code to actually assign to SSBO
+}
+
 }  // namespace spvmanager
