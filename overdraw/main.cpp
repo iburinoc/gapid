@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <functional>
@@ -19,6 +20,8 @@
 #include <vector>
 
 #include <unistd.h>
+
+static char *fname;
 
 struct Vertex {
   glm::vec2 pos;
@@ -665,8 +668,21 @@ class HelloTriangleApplication {
     const uint32_t fragShaderCode[] = {
 #include "triangle.frag.inc"
     };
+    const uint32_t *code = fragShaderCode;
+    size_t codelen = sizeof(fragShaderCode);
+    std::vector<uint32_t> loaded_code;
+    if (fname != nullptr) {
+      FILE* f = fopen(fname, "r");
+      uint32_t val;
+      // depends on being little endian
+      while (fread(&val, 4, 1, f) > 0) {
+        loaded_code.push_back(val);
+      }
+      code = &loaded_code[0];
+      codelen = loaded_code.size() * sizeof(uint32_t);
+    }
     vertShaderModule = createShaderModule(vertShaderCode, sizeof(vertShaderCode));
-    fragShaderModule = createShaderModule(fragShaderCode, sizeof(fragShaderCode));
+    fragShaderModule = createShaderModule(code, codelen);
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1286,7 +1302,10 @@ class HelloTriangleApplication {
   VkEvent event;
 };
 
-int main() {
+int main(int argc, char **argv) {
+  if (argc > 1) {
+    fname = argv[1];
+  }
   HelloTriangleApplication app;
   try {
     app.run();

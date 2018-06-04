@@ -6,31 +6,50 @@
                OpCapability Shader
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
-               OpEntryPoint Fragment %main "main" %outColor %fragColor
+               OpEntryPoint Fragment %main "main" %outColor %fragColor %gl_FragCoord
                OpExecutionMode %main OriginUpperLeft
+; Debug
                OpSource GLSL 450
                OpSourceExtension "GL_ARB_separate_shader_objects"
                OpName %main "main"
                OpName %outColor "outColor"
                OpName %fragColor "fragColor"
+	       OpName %gl_FragCoord "gl_FragCoord"
 	       OpName %overdraw "overdraw"
+	       OpName %OverdrawBuffer "OverdrawBuffer"
+	       OpMemberName %OverdrawBuffer 0 "over"
+
+; Decorations
+	       OpMemberDecorate %OverdrawBuffer 0 Offset 0
                OpDecorate %outColor Location 0
                OpDecorate %fragColor Location 0
+	       OpDecorate %OverdrawBuffer BufferBlock
+	       OpDecorate %gl_FragCoord BuiltIn FragCoord
 	       OpDecorate %overdraw DescriptorSet 1
 	       OpDecorate %overdraw Binding 0
        %void = OpTypeVoid
           %3 = OpTypeFunction %void
       %uint  = OpTypeInt 32 0
 %arr_uint    = OpTypeRuntimeArray %uint
-	
+%OverdrawBuffer = OpTypeStruct %arr_uint
+%_ptr_Uniform_OverdrawBuffer = OpTypePointer Uniform %OverdrawBuffer
+%overdraw    = OpVariable %_ptr_Uniform_OverdrawBuffer Uniform
       %float = OpTypeFloat 32
     %v4float = OpTypeVector %float 4
+    %v2float = OpTypeVector %float 2
+%_ptr_Input_v4float = OpTypePointer Input %v4float
+%gl_FragCoord = OpVariable %_ptr_Input_v4float Input
+%_ptr_Uniform_uint = OpTypePointer Uniform %uint
 %_ptr_Output_v4float = OpTypePointer Output %v4float
    %outColor = OpVariable %_ptr_Output_v4float Output
     %v3float = OpTypeVector %float 3
 %_ptr_Input_v3float = OpTypePointer Input %v3float
   %fragColor = OpVariable %_ptr_Input_v3float Input
     %float_1 = OpConstant %float 1
+%uint_0      = OpConstant %uint 0
+%uint_1      = OpConstant %uint 1
+%uint_800    = OpConstant %uint 800
+%v2uint      = OpTypeVector %uint 2
        %main = OpFunction %void None %3
           %5 = OpLabel
          %13 = OpLoad %v3float %fragColor
@@ -39,5 +58,14 @@
          %17 = OpCompositeExtract %float %13 2
          %18 = OpCompositeConstruct %v4float %15 %16 %17 %float_1
                OpStore %outColor %18
+	 %19 = OpLoad %v4float %gl_FragCoord
+	 %20 = OpVectorShuffle %v2float %19 %19 0 1
+	 %21 = OpConvertFToS %v2uint %20
+	 %22 = OpCompositeExtract %uint %21 0
+	 %23 = OpCompositeExtract %uint %21 1
+	 %24 = OpIMul %uint %uint_800 %23
+	 %25 = OpIAdd %uint %24 %22
+	 %30 = OpAccessChain %_ptr_Uniform_uint %overdraw %uint_0 %25
+	 %31 = OpAtomicIAdd %uint %30 %uint_1 %uint_0 %uint_1
                OpReturn
                OpFunctionEnd
