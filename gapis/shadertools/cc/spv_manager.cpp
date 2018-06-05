@@ -15,7 +15,9 @@
  */
 
 #include "spv_manager.h"
+
 #include <assert.h>
+#include <unordered_set>
 
 namespace spvmanager {
 
@@ -967,19 +969,31 @@ void SpvManager::appendDebugInstruction(std::vector<instruction_t>* debugs, Inst
 void SpvManager::addOverdrawStorageBuffer() {
   // def_use_mgr doesn't like forward declaring id's, so do it in this order
   // Create types
-  uint32_t uint_type_id = addTypeInst(SpvOpTypeInt, {{32}, {0}});
-  uint32_t float_type_id = addTypeInst(SpvOpTypeFloat, {{32}});
-  uint32_t arr_type_id = addTypeInst(SpvOpTypeRuntimeArray, {{uint_type_id}});
-  uint32_t buffer_type_id = addTypeInst(SpvOpTypeStruct, {{uint_type_id, arr_type_id}});
-  uint32_t v2_type_id = addTypeInst(SpvOpTypeVector, {{float_type_id}, {2}});
-  uint32_t v4_type_id = addTypeInst(SpvOpTypeVector, {{float_type_id}, {4}});
-  uint32_t u2_type_id = addTypeInst(SpvOpTypeVector, {{uint_type_id}, {2}});
+#define CREATE_TYPE(name, t) \
+    auto __type##name = (t); \
+    const uint32_t name = type_mgr->GetTypeInstruction(&__type##name); \
+    def_use_mgr->AnalyzeInstDefUse(&*--context->module()->types_values_end());
+  using namespace spvtools::opt::analysis;
+  CREATE_TYPE(uint_type_id, Integer(32, false));
+  CREATE_TYPE(puni_uint_type_id, Pointer(type_mgr->GetType(uint_type_id), SpvStorageClassUniform));
+  CREATE_TYPE(float_type_id, Float(32));
+  CREATE_TYPE(arr_type_id, RuntimeArray(type_mgr->GetType(uint_type_id)));
+  std::vector<Type*> struct_types = {type_mgr->GetType(uint_type_id), type_mgr->GetType(arr_type_id)};
+  CREATE_TYPE(buffer_type_id, Struct(struct_types));
+  CREATE_TYPE(puni_buffer_type_id, Pointer(type_mgr->GetType(buffer_type_id), SpvStorageClassUniform));
+  CREATE_TYPE(v2_type_id, Vector(type_mgr->GetType(float_type_id), 2));
+  CREATE_TYPE(v4_type_id, Vector(type_mgr->GetType(float_type_id), 4));
+  CREATE_TYPE(pinput_v4_type_id, Pointer(type_mgr->GetType(v4_type_id), SpvStorageClassInput));
+  CREATE_TYPE(u2_type_id, Vector(type_mgr->GetType(uint_type_id), 2));
+#undef CREATE_TYPE
 
-  // Create variable
-  uint32_t storage = getUnique();
-  addVariable(buffer_type_id, storage, spv::StorageClassUniform);
-  uint32_t fragcoord = getUnique();
-  addVariable(v4_type_id, fragcoord, spv::StorageClassInput);
+  // Create variables and constants
+  const uint32_t storage = getUnique();
+  addVariable(puni_buffer_type_id, storage, spv::StorageClassUniform);
+  const uint32_t fragcoord = getUnique();
+  addVariable(pinput_v4_type_id, fragcoord, spv::StorageClassInput);
+  const uint32_t uint0 = addConstant(uint_type_id, {0});
+  const uint32_t uint1 = addConstant(uint_type_id, {1});
 
   // Annotate the variables
   context->AddAnnotationInst(makeInstruction(
@@ -996,8 +1010,7 @@ void SpvManager::addOverdrawStorageBuffer() {
       SpvOpDecorate, 0, 0, {{storage}, {SpvDecorationBinding, 0}}));
   context->AddAnnotationInst(makeInstruction(
       SpvOpDecorate, 0, 0, {{fragcoord}, {SpvDecorationBuiltIn, SpvBuiltInFragCoord}}));
-  // Add fragcoord to the entry points
-  printf("%d\n", SpvExecutionModelFragment);
+  // Add fragcoord to the entry points.
   for (auto &entry_point : context->module()->entry_points()) {
     if (entry_point.GetOperand(0).words[0] == SpvExecutionModelFragment) {
       entry_point.AddOperand(spvtools::ir::Operand(SPV_OPERAND_TYPE_ID,
@@ -1005,7 +1018,68 @@ void SpvManager::addOverdrawStorageBuffer() {
     }
   }
 
+  // Find the Output with Location 0
+  // Determine which of the fragment_interfaces are actually outputs
+  std::unordered_set<uint32_t> loc0;
+  for (const auto &annot : context->module()->annotations()) {
+    if (annot.opcode() == SpvOpDecorate &&
+        annot.GetOperand(1).words[0] == SpvDecorationLocation &&
+        annot.GetOperand(2).words[0] == 0) {
+      loc0.insert(annot.GetOperand(0).words[0]);
+    }
+  }
+  uint32_t output_id = ~0;
+  for (const auto &typ_val : context->module()->types_values()) {
+    if (typ_val.opcode() == SpvOpVariable &&
+        loc0.count(typ_val.result_id()) != 0 &&
+        typ_val.GetOperand(2).words[0] == SpvStorageClassOutput) {
+      output_id = typ_val.result_id();
+    }
+  }
+
+  // TODO: Handle multiple outputs
   // FIXME: Add code to actually assign to SSBO
+  for (auto &function : *(context->module())) {
+    function.ForEachInst([&](Instruction *inst) void {
+      if (inst->opcode() == SpvOpStore && inst->GetOperand(0).words[0] == output_id) {
+        // Add the code to do the store here
+        std::vector<std::unique_ptr<Instruction>> to_add;
+        const uint32_t NUM_RESULTS = 11;
+        uint32_t results[NUM_RESULTS];
+        for (size_t i = 0; i < NUM_RESULTS; i++) {
+          results[i] = getUnique();
+        }
+        to_add.push_back(makeInstruction(
+            SpvOpLoad, v4_type_id, results[0], {{fragcoord}}));
+        to_add.push_back(makeInstruction(
+            SpvOpVectorShuffle, v2_type_id, results[1], {{results[0]}, {results[0]}, {0, 1}}));
+        to_add.push_back(makeInstruction(
+            SpvOpConvertFToS, u2_type_id, results[2], {{results[1]}}));
+        to_add.push_back(makeInstruction(
+            SpvOpCompositeExtract, uint_type_id, results[3], {{results[2]}, {0}}));
+        to_add.push_back(makeInstruction(
+            SpvOpCompositeExtract, uint_type_id, results[4], {{results[2]}, {1}}));
+        to_add.push_back(makeInstruction(
+            SpvOpAccessChain, puni_uint_type_id, results[5], {{storage}, {uint0}}));
+        to_add.push_back(makeInstruction(
+            SpvOpLoad, uint_type_id, results[6], {{results[5]}}));
+        to_add.push_back(makeInstruction(
+            SpvOpIMul, uint_type_id, results[7], {{results[4]}, {results[6]}}));
+        to_add.push_back(makeInstruction(
+            SpvOpIAdd, uint_type_id, results[8], {{results[3]}, {results[7]}}));
+        to_add.push_back(makeInstruction(
+            SpvOpAccessChain, puni_uint_type_id, results[9], {{storage}, {uint1, results[8]}}));
+        to_add.push_back(makeInstruction(
+            SpvOpAtomicIAdd, uint_type_id, results[10], {{results[9]},
+              {uint1 /* Device scope */},
+              {uint0 /* Memory semantics "None" */},
+              {uint1 /* increment amount */}}));
+        for (auto it = to_add.rbegin(); it != to_add.rend(); it++) {
+          it->release()->InsertAfter(inst);
+        }
+      }
+    });
+  }
 }
 
 }  // namespace spvmanager

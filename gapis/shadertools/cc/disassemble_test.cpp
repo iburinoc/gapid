@@ -27,7 +27,15 @@ void overdraw_test(const std::vector<uint32_t> &spirv_binary) {
 
   manager.addOverdrawStorageBuffer();
 
-  auto result = manager.getSpvBinary();
+  std::vector<uint32_t> result = manager.getSpvBinary();
+  if (FILE *fp = fopen("out.spv", "wb")) {
+    if (fwrite(&result[0], sizeof(uint32_t), result.size(), fp) != result.size()) {
+      fprintf(stderr, "error: failed to write file\n");
+    }
+    fclose(fp);
+  } else {
+    fprintf(stderr, "error: failed to open output file\n");
+  }
   const char *dis_text = getDisassembleText(result.data(), result.size());
   if (dis_text) {
   	printf("%s\n", dis_text);
