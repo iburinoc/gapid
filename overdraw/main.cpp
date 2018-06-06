@@ -142,9 +142,9 @@ class HelloTriangleApplication {
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createStencilImage();
     createRenderPass();
     createDescriptorSetLayout();
-    createStorageBuffer();
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
@@ -277,13 +277,6 @@ class HelloTriangleApplication {
         break;
       }
     }
-
-    VkPhysicalDeviceProperties props;
-    vkGetPhysicalDeviceProperties(physicalDevice, &props);
-    std::cout << "max color attachments: " << props.limits.maxColorAttachments << std::endl;
-    VkPhysicalDeviceFeatures features;
-    vkGetPhysicalDeviceFeatures(physicalDevice, &features);
-    std::cout << "fragmentStoresAndAtomics: " << features.fragmentStoresAndAtomics << std::endl;
 
     if (physicalDevice == VK_NULL_HANDLE) {
       throw std::runtime_error("failed to find a suitable GPU");
@@ -533,6 +526,63 @@ class HelloTriangleApplication {
     }
   }
 
+  void createStencilImage() {
+    VkImageCreateInfo icreateInfo = {};
+    icreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    icreateInfo.pNext = nullptr;
+    icreateInfo.flags = 0;
+    icreateInfo.imageType = VK_IMAGE_TYPE_2D;
+    icreateInfo.format = VK_FORMAT_S8_UINT;
+    icreateInfo.extent.width = swapChainExtent.width;
+    icreateInfo.extent.height = swapChainExtent.height;
+    icreateInfo.extent.depth = 1;
+    icreateInfo.mipLevels = 1;
+    icreateInfo.arrayLayers = 1;
+    icreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    icreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    icreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    icreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    icreateInfo.queueFamilyIndexCount = 0;
+    icreateInfo.pQueueFamilyIndices = nullptr;
+    icreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    if (vkCreateImage(device, &icreateInfo, nullptr, &stencilImage) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create stencil image");
+    }
+
+    VkMemoryRequirements reqs;
+    vkGetImageMemoryRequirements(device, stencilImage, &reqs);
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = reqs.size;
+    allocInfo.memoryTypeIndex = findMemoryType(reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    if (vkAllocateMemory(device, &allocInfo, nullptr, &stencilImageMemory) != VK_SUCCESS) {
+      throw std::runtime_error("failed to allocate memory for stencil image");
+    }
+    vkBindImageMemory(device, stencilImage, stencilImageMemory, 0);
+
+    VkImageViewCreateInfo vcreateInfo = {};
+    vcreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vcreateInfo.pNext = nullptr;
+    vcreateInfo.image = stencilImage;
+    vcreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    vcreateInfo.format = VK_FORMAT_S8_UINT;
+    vcreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    vcreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    vcreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    vcreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    vcreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+    vcreateInfo.subresourceRange.baseMipLevel = 0;
+    vcreateInfo.subresourceRange.levelCount = 1;
+    vcreateInfo.subresourceRange.baseArrayLayer = 0;
+    vcreateInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(device, &vcreateInfo, nullptr, &stencilImageView) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create stencil image view");
+    }
+  }
+
   void createRenderPass() {
     VkAttachmentDescription colorAttachment = {};
     colorAttachment.format = swapChainImageFormat;
@@ -547,19 +597,35 @@ class HelloTriangleApplication {
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+    VkAttachmentDescription stencilAttachment = {};
+    stencilAttachment.format = VK_IMAGE_FORMAT_S8_UINT;
+    stencilAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    stencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    stencilAttachment.storeOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    stencilAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    stencilAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+    stencilAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    stencilAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
     VkAttachmentReference colorAttachmentRef = {};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference stencilAttachmentRef = {};
+    stencilAttachmentRef.attachment = 1;
+    stencilAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass = {};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
+    subpass.pDepthStencilAttachment = &stencilAttachmentReference;
+
+    VkAttachmentDescription attachments[] = {colorAttachment, stencilAttachment};
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.attachmentCount = 2;
+    renderPassInfo.pAttachments = attachments;
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
 
@@ -603,59 +669,6 @@ class HelloTriangleApplication {
     if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
       throw std::runtime_error("failed to create descriptor set layout");
     }
-  }
-
-  void createStorageBuffer() {
-    VkDeviceSize size = static_cast<VkDeviceSize>(WIDTH * HEIGHT * sizeof(uint32_t));
-    createBuffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, storageBuffer, storageBufferMemory);
-
-    VkDescriptorSetLayoutBinding binding = {};
-    binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    binding.descriptorCount = 1;
-    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo info = {};
-    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    info.bindingCount = 1;
-    info.pBindings = &binding;
-
-    if (vkCreateDescriptorSetLayout(device, &info, nullptr, &storageBufferLayout) != VK_SUCCESS) {
-      throw std::runtime_error("failed to create descriptor set layout for storage buffer");
-    }
-
-    VkDescriptorPoolCreateInfo pinfo = {};
-    pinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pinfo.maxSets = 1;
-    pinfo.poolSizeCount = 1;
-    VkDescriptorPoolSize psize = {};
-    psize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    psize.descriptorCount = 1;
-    pinfo.pPoolSizes = &psize;
-    if (vkCreateDescriptorPool(device, &pinfo, nullptr, &storageBufferPool) != VK_SUCCESS) {
-      throw std::runtime_error("failed to create descriptor pool for storage buffer");
-    }
-
-    VkDescriptorSetAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = storageBufferPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &storageBufferLayout;
-    if (vkAllocateDescriptorSets(device, &allocInfo, &storageBufferSet) != VK_SUCCESS) {
-      throw std::runtime_error("failed to allocate descriptor set for storage buffer");
-    }
-
-    VkWriteDescriptorSet write = {};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = storageBufferSet;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    VkDescriptorBufferInfo binfo = {};
-    binfo.buffer = storageBuffer;
-    binfo.offset = 0;
-    binfo.range = VK_WHOLE_SIZE;
-    write.pBufferInfo = &binfo;
-    vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
   }
 
   void createGraphicsPipeline() {
@@ -761,8 +774,8 @@ class HelloTriangleApplication {
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 2;
-    VkDescriptorSetLayout layouts[] = {descriptorSetLayout, storageBufferLayout};
+    pipelineLayoutInfo.setLayoutCount = 1;
+    VkDescriptorSetLayout layouts[] = {descriptorSetLayout};
     pipelineLayoutInfo.pSetLayouts = layouts;
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
@@ -973,14 +986,10 @@ class HelloTriangleApplication {
       throw std::runtime_error("failed to allocate descriptor set");
     }
 
-    VkDescriptorBufferInfo bufferInfo[] = {{}, {}};
+    VkDescriptorBufferInfo bufferInfo[] = {{}};
     bufferInfo[0].buffer = uniformBuffer;
     bufferInfo[0].offset = 0;
     bufferInfo[0].range = sizeof(UniformBufferObject);
-
-    bufferInfo[1].buffer = storageBuffer;
-    bufferInfo[1].offset = 0;
-    bufferInfo[1].range = WIDTH*HEIGHT*sizeof(uint32_t);
 
     VkWriteDescriptorSet descriptorWrite[] = {{}, {}};
     descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1055,8 +1064,8 @@ class HelloTriangleApplication {
       VkDeviceSize offsets[] = {0};
       vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
       vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
-      VkDescriptorSet sets[] = {descriptorSet, storageBufferSet};
-      vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, sets, 0, nullptr);
+      VkDescriptorSet sets[] = {descriptorSet};
+      vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, sets, 0, nullptr);
       vkCmdDrawIndexed(commandBuffers[i], 6, 1, 0, 0, 0);
 
       vkCmdEndRenderPass(commandBuffers[i]);
@@ -1137,22 +1146,6 @@ class HelloTriangleApplication {
     if (vkQueueSubmit(graphicsQueue, 2, submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
       throw std::runtime_error("failed to submit draw command buffer");
     }
-    while (vkGetEventStatus(device, event) != VK_EVENT_SET);
-    void *dat;
-    vkMapMemory(device, storageBufferMemory, 0, VK_WHOLE_SIZE, 0, &dat);
-    uint32_t *data = (uint32_t*) dat;
-    uint32_t count = 0;
-    uint32_t max = 0;
-    for (uint32_t r = 0; r < HEIGHT; r++) {
-      for (uint32_t c = 0; c < WIDTH; c++) {
-        uint32_t idx = r * WIDTH + c;
-        if (data[idx] > max) max = data[idx];
-        count += data[idx];
-        data[idx] = 0;
-      }
-    }
-    std::cout << "max: " << max << " count: " << count << std::endl;
-    vkUnmapMemory(device, storageBufferMemory);
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1207,10 +1200,8 @@ class HelloTriangleApplication {
     cleanupSwapChain();
 
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-    vkDestroyDescriptorPool(device, storageBufferPool, nullptr);
 
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(device, storageBufferLayout, nullptr);
 
     vkDestroyBuffer(device, vertexBuffer, nullptr);
     vkFreeMemory(device, vertexBufferMemory, nullptr);
@@ -1219,8 +1210,8 @@ class HelloTriangleApplication {
     vkDestroyBuffer(device, uniformBuffer, nullptr);
     vkFreeMemory(device, uniformBufferMemory, nullptr);
 
-    vkDestroyBuffer(device, storageBuffer, nullptr);
-    vkFreeMemory(device, storageBufferMemory, nullptr);
+    vkDestroyImage(device, stencilImage, nullptr);
+    vkFreeMemory(device, stencilImageMemory, nullptr);
 
     vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
     vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
@@ -1270,12 +1261,6 @@ class HelloTriangleApplication {
   VkExtent2D swapChainExtent;
   std::vector<VkImageView> swapChainImageViews;
 
-  VkBuffer storageBuffer;
-  VkDeviceMemory storageBufferMemory;
-  VkDescriptorPool storageBufferPool;
-  VkDescriptorSet storageBufferSet;
-  VkDescriptorSetLayout storageBufferLayout;
-
   VkRenderPass renderPass;
   VkDescriptorSetLayout descriptorSetLayout;
   VkPipelineLayout pipelineLayout;
@@ -1292,6 +1277,10 @@ class HelloTriangleApplication {
   VkDeviceMemory indexBufferMemory;
   VkBuffer uniformBuffer;
   VkDeviceMemory uniformBufferMemory;
+
+  VkImage stencilImage;
+  VkDeviceMemory stencilImageMemory;
+  VkImageView stencilImageView;
 
   VkDescriptorPool descriptorPool;
   VkDescriptorSet descriptorSet;
