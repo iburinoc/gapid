@@ -56,7 +56,7 @@ message FramebufferAttachmentBytesResolvable {
 	uint32 width = 3;
 	uint32 height = 4;
 	api.FramebufferAttachment attachment = 5;
-	service.WireframeMode wireframe_mode = 6;
+	service.DrawMode draw_mode = 6;
 	service.UsageHints hints = 7;
 	image.Format image_format = 8;
 	uint32 framebuffer_index = 9;
