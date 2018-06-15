@@ -91,7 +91,7 @@ func (verb *screenshotVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	}
 
 	if frame, err := getSingleFrame(ctx, command, device, client, verb.NoOpt); err == nil {
-		return verb.writeSingleFrame(flipImg(frame), verb.Out)
+		return verb.writeSingleFrame(frame, verb.Out)
 	} else {
 		return err
 	}
@@ -107,9 +107,9 @@ func (verb *screenshotVerb) writeSingleFrame(frame image.Image, fn string) error
 	return png.Encode(out, frame)
 }
 
-func getSingleFrame(ctx context.Context, cmd *path.Command, device *path.Device, client service.Service, noOpt bool) (*image.NRGBA, error) {
+func getSingleFrame(ctx context.Context, cmd *path.Command, device *path.Device, client service.Service, noOpt bool) (*image.Gray, error) {
 	ctx = log.V{"cmd": cmd.Indices}.Bind(ctx)
-	settings := &service.RenderSettings{MaxWidth: uint32(0xFFFFFFFF), MaxHeight: uint32(0xFFFFFFFF)}
+	settings := &service.RenderSettings{MaxWidth: uint32(0xFFFFFFFF), MaxHeight: uint32(0xFFFFFFFF), DrawMode: service.DrawMode_OVERDRAW}
 	iip, err := client.GetFramebufferAttachment(ctx,
 		&service.ReplaySettings{
 			Device: device,
@@ -124,11 +124,18 @@ func getSingleFrame(ctx context.Context, cmd *path.Command, device *path.Device,
 		return nil, log.Errf(ctx, err, "Get frame image.Info failed")
 	}
 	ii := iio.(*img.Info)
+	fmt.Println(ii)
 	dataO, err := client.Get(ctx, path.NewBlob(ii.Bytes.ID()).Path())
 	if err != nil {
 		return nil, log.Errf(ctx, err, "Get frame image data failed")
 	}
 	w, h, data := int(ii.Width), int(ii.Height), dataO.([]byte)
+
+	total := 0
+	for _, byt := range data {
+		total += int(byt)
+	}
+	fmt.Println("total: ", total)
 
 	ctx = log.V{
 		"width":  w,
@@ -138,12 +145,12 @@ func getSingleFrame(ctx context.Context, cmd *path.Command, device *path.Device,
 	if ii.Width == 0 || ii.Height == 0 {
 		return nil, log.Err(ctx, nil, "Framebuffer has zero dimensions")
 	}
-	data, err = img.Convert(data, w, h, 1, ii.Format, img.RGBA_U8_NORM)
+	data, err = img.Convert(data, w, h, 1, ii.Format, img.S_U8)
 	if err != nil {
 		return nil, log.Err(ctx, err, "Failed to convert frame to RGBA")
 	}
-	stride := w * 4
-	return &image.NRGBA{
+	stride := w
+	return &image.Gray{
 		Rect:   image.Rect(0, 0, w, h),
 		Stride: stride,
 		Pix:    data,

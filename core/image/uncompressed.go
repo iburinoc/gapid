@@ -33,6 +33,7 @@ var (
 	R_S16_NORM    = newUncompressed(fmts.R_S16_NORM)
 	RG_S16_NORM   = newUncompressed(fmts.RG_S16_NORM)
 	D_U16_NORM    = newUncompressed(fmts.D_U16_NORM)
+	S_U8          = newUncompressed(fmts.S_U8)
 )
 
 // newUncompressed returns a new uncompressed format containing with the default
