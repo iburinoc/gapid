@@ -48,6 +48,25 @@ type SubcommandReference struct {
 	IsCallerGroup bool
 }
 
+// FIXME
+type SyncIdx uint64
+
+// FIXME
+type SyncPoint interface {
+	isSyncPoint()
+}
+
+type CmdIdx struct {
+	Idx api.SubCmdIdx
+}
+
+type AbstractPoint struct{}
+
+var (
+	_ = SyncPoint(CmdIdx{})
+	_ = SyncPoint(AbstractPoint{})
+)
+
 // Data contains a map of synchronization pairs.
 type Data struct {
 	// CommandRanges contains commands that will be blocked from completion,
@@ -67,12 +86,9 @@ type Data struct {
 	SubCommandMarkerGroups *subCommandMarkerGroupTrie
 	// SyncDependencies contains the commands that must complete
 	// (according to their fences or semaphores) before they can be executed.
-	SyncDependencies map[api.CmdID]SynchronizationIndices
-	// HostSyncBarriers are commands that will not return control to the
-	// host before they (and so their dependencies) complete.
-	// This means any command run after a "host sync barrier" can assume
-	// all of the dependencies of the barrier were executed.
-	HostSyncBarriers SynchronizationIndices
+	SyncDependencies map[SyncIdx][]SyncIdx
+	SyncPoints       []SyncPoint
+	CmdSyncPoints    map[api.CmdID]SyncIdx
 }
 
 type subCommandMarkerGroupTrie struct {
@@ -103,8 +119,9 @@ func NewData() *Data {
 		SubcommandGroups:       map[api.CmdID][]api.SubCmdIdx{},
 		Hidden:                 api.CmdIDSet{},
 		SubCommandMarkerGroups: &subCommandMarkerGroupTrie{},
-		SyncDependencies:       map[api.CmdID]SynchronizationIndices{},
-		HostSyncBarriers:       SynchronizationIndices{},
+		SyncDependencies:       map[SyncIdx][]SyncIdx{},
+		SyncPoints:             []SyncPoint{},
+		CmdSyncPoints:          map[api.CmdID]SyncIdx{},
 	}
 }
 
@@ -142,3 +159,7 @@ func (e ExecutionRanges) SortedKeys() SynchronizationIndices {
 	sort.Sort(v)
 	return v
 }
+
+func (CmdIdx) isSyncPoint() {}
+
+func (AbstractPoint) isSyncPoint() {}

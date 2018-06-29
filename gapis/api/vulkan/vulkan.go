@@ -392,74 +392,121 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 		return err
 	}
 
-	state := GetState(st)
-
 	l := st.MemoryLayout
 
-	depends := map[api.CmdID]sync.SynchronizationIndices{}
-	hostBarriers := sync.SynchronizationIndices{}
+	points := []sync.SyncPoint{}
+	depends := map[sync.SyncIdx][]sync.SyncIdx{}
+	addPoint := func(pt sync.SyncPoint) sync.SyncIdx {
+		points = append(points, pt)
+		return sync.SyncIdx(len(points) - 1)
+	}
+	addDep := func(depender, dependee sync.SyncIdx) {
+		v, _ := depends[depender]
+		// append to nil is ok
+		depends[depender] = append(v, dependee)
+	}
+	lastHostBarrier := addPoint(sync.AbstractPoint{})
 
-	semSignaler := map[VkSemaphore]api.CmdID{}
-	semDepend := func(id api.CmdID, sem VkSemaphore) {
+	cmdPoints := map[api.CmdID]sync.SyncIdx{}
+	getCmdPoint := func(id api.CmdID) sync.SyncIdx {
+		if pt, ok := cmdPoints[id]; ok {
+			return pt
+		}
+		cmdPoints[id] = addPoint(sync.CmdIdx{[]uint64{uint64(id)}})
+		return cmdPoints[id]
+	}
+
+	semSignaler := map[VkSemaphore]sync.SyncIdx{}
+	semDepend := func(idx sync.SyncIdx, sem VkSemaphore) {
 		signaler, ok := semSignaler[sem]
-		if signaler != id && ok {
-			val, ok := depends[id]
-			if !ok {
-				val = []api.CmdID{}
-			}
-			depends[id] = append(val, signaler)
+		if ok {
+			addDep(idx, signaler)
 			delete(semSignaler, sem)
 		}
 	}
 
-	fenceSignaler := map[VkFence]api.CmdID{}
-	fenceDepend := func(id api.CmdID, fence VkFence) {
+	fenceSignaler := map[VkFence]sync.SyncIdx{}
+	fenceDepend := func(idx sync.SyncIdx, fence VkFence) {
 		signaler, ok := fenceSignaler[fence]
-		if signaler != id && ok {
-			val, ok := depends[id]
-			if !ok {
-				val = []api.CmdID{}
-			}
-			depends[id] = append(val, signaler)
+		if ok {
+			addDep(idx, signaler)
 		}
 	}
 
-	queueSubmits := map[VkQueue][]api.CmdID{}
+	queueSubmits := map[VkQueue][]sync.SyncIdx{}
 	deviceQueues := map[VkDevice]map[VkQueue]struct{}{}
-	addSubmit := func(id api.CmdID, queue VkQueue, device VkDevice) {
-		qs, qok := queueSubmits[queue]
-		if !qok {
-			qs = []api.CmdID{}
-		}
-		queueSubmits[queue] = append(qs, id)
-		_, dok := deviceQueues[device]
-		if !dok {
-			deviceQueues[device] = map[VkQueue]struct{}{}
-		}
-		deviceQueues[device][queue] = struct{}{}
+	addSubmit := func(idx sync.SyncIdx, queue VkQueue) {
+		qs, _ := queueSubmits[queue]
+		queueSubmits[queue] = append(qs, idx)
 	}
-	clearQueue := func(id api.CmdID, queue VkQueue) {
+	clearQueue := func(idx sync.SyncIdx, queue VkQueue) {
 		qs, ok := queueSubmits[queue]
 		if ok {
 			delete(queueSubmits, queue)
-			val, ok := depends[id]
-			if !ok {
-				val = []api.CmdID{}
-			}
-			depends[id] = append(val, qs...)
+			val, _ := depends[idx]
+			depends[idx] = append(val, qs...)
 		}
 	}
 
 	// FIXME: figure out how queue submits interact with each other
 	api.ForeachCmd(ctx, cmds, func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
 		// only track the commands that do anything
-		if err := cmd.Mutate(ctx, id, st, nil); err != nil {
-			panic(err)
+		switch c := cmd.(type) {
+		case *VkQueueSubmit:
+		case *VkQueuePresentKHR:
+		case *VkCreateFence:
+		case *VkGetFenceStatus:
+		case *VkWaitForFences:
+		case *VkResetFences:
+		case *VkQueueWaitIdle:
+		case *VkDeviceWaitIdle:
+		case *VkGetDeviceQueue:
+			// Not part of the graph, just need to associate the queues with the device
+			c.Extras().Observations().ApplyReads(st.Memory.ApplicationPool())
+			queue := c.PQueue().MustRead(ctx, c, st, nil)
+			if _, ok := deviceQueues[c.Device()]; !ok {
+				deviceQueues[c.Device()] = map[VkQueue]struct{}{}
+			}
+			deviceQueues[c.Device()][queue] = struct{}{}
+			return nil
+		default:
+			return nil
 		}
+		cmd.Extras().Observations().ApplyReads(st.Memory.ApplicationPool())
+		cmdPt := getCmdPoint(id)
+		addDep(cmdPt, lastHostBarrier)
 		switch c := cmd.(type) {
 		case *VkQueueSubmit:
 			submitCount := uint64(c.SubmitCount())
 			submits := c.PSubmits().Slice(uint64(0), submitCount, l).MustRead(ctx, cmd, st, nil)
+
+			submitSrcs := make([]sync.SyncIdx, len(submits))
+			submitDsts := make([]sync.SyncIdx, len(submits))
+			for i, s := range submits {
+				src := addPoint(sync.AbstractPoint{})
+				dst := addPoint(sync.AbstractPoint{})
+
+				waitSems := s.PWaitSemaphores().Slice(
+					uint64(0),
+					uint64(s.WaitSemaphoreCount()), l).
+					MustRead(ctx, cmd, st, nil)
+				for _, s := range waitSems {
+					semDepend(src, s)
+				}
+
+				signalSems := s.PSignalSemaphores().Slice(
+					uint64(0),
+					uint64(s.SignalSemaphoreCount()), l).
+					MustRead(ctx, cmd, st, nil)
+				for _, s := range signalSems {
+					semSignaler[s] = dst
+				}
+
+				addDep(src, cmdPt)
+
+				submitSrcs[i] = src
+				submitDsts[i] = dst
+			}
 
 			type commandExecutor struct {
 				lastIdx  api.SubCmdIdx
@@ -478,47 +525,31 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 			})
 
 			excIdx := 0
-
-			subcmds := d.SubcommandReferences[id]
-			submitFirstIdx := 0
-			for i, s := range submits {
-				first := subcmds[submitFirstIdx].Index
-
-				for excIdx < len(executors) && executors[excIdx].lastIdx.LessThan(first) {
+			for _, subcmd := range d.SubcommandReferences[id] {
+				for excIdx < len(executors) && executors[excIdx].lastIdx.LessThan(subcmd.Index) {
 					excIdx++
 				}
-				waitSems := s.PWaitSemaphores().Slice(
-					uint64(0),
-					uint64(s.WaitSemaphoreCount()), l).
-					MustRead(ctx, cmd, st, nil)
-				for _, s := range waitSems {
-					semDepend(executors[excIdx].executor, s)
-				}
 
-				for submitFirstIdx < len(subcmds) && subcmds[submitFirstIdx].Index[0] <= uint64(i) {
-					submitFirstIdx++
-				}
+				sp := addPoint(sync.CmdIdx{
+					append(api.SubCmdIdx{uint64(id)}, subcmd.Index...),
+				})
+				sub := subcmd.Index[0]
+				addDep(sp, submitSrcs[sub])
+				addDep(submitDsts[sub], sp)
+				addDep(sp, getCmdPoint(executors[excIdx].executor))
+			}
 
-				last := subcmds[submitFirstIdx-1].Index
-				for excIdx < len(executors) && executors[excIdx].lastIdx.LessThan(last) {
-					excIdx++
-				}
-				sigSems := s.PSignalSemaphores().Slice(
-					uint64(0),
-					uint64(s.SignalSemaphoreCount()), l).
-					MustRead(ctx, cmd, st, nil)
-				for _, s := range sigSems {
-					semSignaler[s] = executors[excIdx].executor
-				}
+			donePt := addPoint(sync.AbstractPoint{})
+			for _, dst := range submitDsts {
+				addDep(donePt, dst)
 			}
 
 			fence := c.Fence()
 			if fence != VkFence(0) {
-				fenceSignaler[fence] = executors[len(executors)-1].executor
+				fenceSignaler[fence] = donePt
 			}
 			queue := c.Queue()
-			device := state.Queues().Get(queue).data.device
-			addSubmit(id, queue, device)
+			addSubmit(donePt, queue)
 		case *VkQueuePresentKHR:
 			info := c.PPresentInfo().Slice(uint64(0), uint64(1), l).MustRead(ctx, cmd, st, nil)[0]
 			waitSems := info.PWaitSemaphores().Slice(
@@ -526,7 +557,7 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 				uint64(info.WaitSemaphoreCount()),
 				l).MustRead(ctx, cmd, st, nil)
 			for _, s := range waitSems {
-				semDepend(id, s)
+				semDepend(cmdPt, s)
 			}
 		case *VkCreateFence:
 			signaledBit := VkFenceCreateFlags(VkFenceCreateFlagBits_VK_FENCE_CREATE_SIGNALED_BIT)
@@ -536,12 +567,12 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 				Flags()) & signaledBit) == signaledBit
 			if signaled {
 				fence := c.PFence().Slice(uint64(0), uint64(1), l).MustRead(ctx, cmd, st, nil)[0]
-				fenceSignaler[fence] = id
+				fenceSignaler[fence] = cmdPt
 			}
 		case *VkGetFenceStatus:
 			if c.Result() == VkResult_VK_SUCCESS {
-				fenceDepend(id, c.Fence())
-				hostBarriers = append(hostBarriers, id)
+				fenceDepend(cmdPt, c.Fence())
+				lastHostBarrier = cmdPt
 			}
 		case *VkWaitForFences:
 			fenceCount := uint64(c.FenceCount())
@@ -549,9 +580,9 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 				// We can be sure all the fences were signaled
 				fences := c.PFences().Slice(uint64(0), fenceCount, l).MustRead(ctx, cmd, st, nil)
 				for _, f := range fences {
-					fenceDepend(id, f)
+					fenceDepend(cmdPt, f)
 				}
-				hostBarriers = append(hostBarriers, id)
+				lastHostBarrier = cmdPt
 			}
 		case *VkResetFences:
 			fences := c.PFences().Slice(uint64(0), uint64(c.FenceCount()), l).MustRead(ctx, cmd, st, nil)
@@ -559,22 +590,23 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 				delete(fenceSignaler, f)
 			}
 		case *VkQueueWaitIdle:
-			clearQueue(id, c.Queue())
-			hostBarriers = append(hostBarriers, id)
+			clearQueue(cmdPt, c.Queue())
+			lastHostBarrier = cmdPt
 		case *VkDeviceWaitIdle:
 			queues, ok := deviceQueues[c.Device()]
 			if ok {
 				for q := range queues {
-					clearQueue(id, q)
+					clearQueue(cmdPt, q)
 				}
 			}
-			hostBarriers = append(hostBarriers, id)
+			lastHostBarrier = cmdPt
 		}
 		return nil
 	})
 
 	d.SyncDependencies = depends
-	d.HostSyncBarriers = hostBarriers
+	d.SyncPoints = points
+	d.CmdSyncPoints = cmdPoints
 	return nil
 }
 
