@@ -19,10 +19,14 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
+	"text/tabwriter"
 
 	"github.com/google/gapid/core/app"
+	"github.com/google/gapid/core/data/protoutil"
 	"github.com/google/gapid/core/log"
 	"github.com/google/gapid/core/math/sint"
 	"github.com/google/gapid/gapis/client"
@@ -70,7 +74,6 @@ func (verb *infoVerb) getEventsInRange(ctx context.Context, client service.Servi
 	events, err := getEvents(ctx, client, &path.Events{
 		Capture:                 capture,
 		AllCommands:             true,
-		DrawCalls:               true,
 		FirstInFrame:            true,
 		LastInFrame:             true,
 		FramebufferObservations: true,
@@ -114,84 +117,32 @@ func (verb *infoVerb) getEventsInRange(ctx context.Context, client service.Servi
 	return events[begin:end], nil
 }
 
-type aggregateStats struct {
-	average float64
-	stddev  float64
-	median  int
-}
-
-func computeStats(values []int) aggregateStats {
-	if len(values) == 0 {
-		return aggregateStats{}
-	}
-	total, total2 := 0, 0
-
-	sort.Ints(values)
-
-	for _, v := range values {
-		total += v
-		total2 += v * v
-	}
-
-	n := float64(len(values))
-	avg, avg2 := float64(total)/n, float64(total2)/n
-	return aggregateStats{
-		average: avg,
-		stddev:  math.Sqrt(avg2 - avg*avg),
-		median:  values[len(values)/2],
-	}
-
-}
-
-func callsPerFrame(events []*service.Event) aggregateStats {
-	frameIndices := []uint64{}
-	for _, e := range events {
-		if e.Kind == service.EventKind_FirstInFrame {
-			frameIndices = append(frameIndices, e.Command.Indices[0])
-		}
-	}
-	frameIndices = append(frameIndices, math.MaxUint64)
-
-	counts := []int{}
-	frame := 0
-	since := 0
-	for _, e := range events {
-		for frame+1 < len(frameIndices) && e.Command.Indices[0] >= frameIndices[frame+1] {
-			counts = append(counts, since)
-			since = 0
-			frame = frame + 1
-		}
-		if e.Kind == service.EventKind_AllCommands {
-			since = since + 1
-		}
-	}
-	counts = append(counts, since)
-
-	return computeStats(counts)
-}
-
-func (verb *infoVerb) drawCallsPerFrame(ctx context.Context, client service.Service, capture *path.Capture) (aggregateStats, error) {
-	res, err := client.Get(ctx, (&path.Stats{
-		Capture: capture,
-	}).Path())
+func (verb *infoVerb) drawCallStats(ctx context.Context, client client.Client, c *path.Capture) (int, sint.HistogramStats, error) {
+	val, err := client.Get(ctx, (&path.Stats{Capture: c}).Path())
 	if err != nil {
-		return aggregateStats{}, err
+		return 0, sint.HistogramStats{}, err
+	}
+	// Box has an extra field so protoutil OneOf doesn't work
+	b := reflect.ValueOf(val).Elem().Field(1).Interface()
+	oo := protoutil.OneOf
+	data := oo(oo(oo(oo(b)))).([]uint64)
+
+	if verb.Frames.Start < len(data) {
+		data = data[verb.Frames.Start:]
+	} else {
+		data = []uint64{}
+	}
+	if verb.Frames.Count >= 0 && verb.Frames.Count < len(data) {
+		data = data[:verb.Frames.Count]
 	}
 
-	constants := res.(*service.ConstantSet).Constants
-	counts := make([]int, len(constants))
-	for i, val := range constants {
-		counts[i] = int(val.Value)
+	hist := make(sint.Histogram, len(data))
+	totalDraws := 0
+	for i, dat := range data {
+		totalDraws += int(dat)
+		hist[i] = int(dat)
 	}
-
-	if verb.Frames.Start <= len(counts) {
-		counts = counts[verb.Frames.Start:]
-	}
-	if verb.Frames.Count >= 0 && verb.Frames.Count < len(counts) {
-		counts = counts[:verb.Frames.Count]
-	}
-
-	return computeStats(counts), nil
+	return totalDraws, hist.Stats(), nil
 }
 
 func (verb *infoVerb) Run(ctx context.Context, flags flag.FlagSet) error {
@@ -220,24 +171,26 @@ func (verb *infoVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 			}
 		}
 	}
-
-	callStats := callsPerFrame(events)
-
-	drawStats, err := verb.drawCallsPerFrame(ctx, client, capture)
+	callStats := cmdsPerFrame.Stats()
+	totalDraws, drawStats, err := verb.drawCallStats(ctx, client, capture)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Commands:                    ", counts[service.EventKind_AllCommands])
-	fmt.Println("Frames:                      ", counts[service.EventKind_FirstInFrame])
-	fmt.Println("Draws:                       ", counts[service.EventKind_DrawCall])
-	fmt.Println("FBO:                         ", counts[service.EventKind_FramebufferObservation])
-	fmt.Printf("Avg commands per frame:       %.2f\n", callStats.average)
-	fmt.Printf("Stddev commands per frame:    %.2f\n", callStats.stddev)
-	fmt.Println("Median commands per frame:   ", callStats.median)
-	fmt.Printf("Avg draw calls per frame:     %.2f\n", drawStats.average)
-	fmt.Printf("Stddev draw calls per frame:  %.2f\n", drawStats.stddev)
-	fmt.Println("Median draw calls per frame: ", drawStats.median)
+	w := tabwriter.NewWriter(os.Stdout, 4, 4, 0, ' ', 0)
+	fmt.Fprintf(w, "Commands: \t%v\n", counts[service.EventKind_AllCommands])
+	fmt.Fprintf(w, "Frames: \t%v\n", counts[service.EventKind_FirstInFrame])
+	fmt.Fprintf(w, "Draws: \t%v\n", totalDraws)
+	fmt.Fprintf(w, "FBO: \t%v\n", counts[service.EventKind_FramebufferObservation])
 
-	return err
+	fmt.Fprintf(w, "Avg commands per frame: \t%.2f\n", callStats.Average)
+	fmt.Fprintf(w, "Stddev commands per frame: \t%.2f\n", callStats.Stddev)
+	fmt.Fprintf(w, "Median commands per frame: \t%v\n", callStats.Median)
+
+	fmt.Fprintf(w, "Avg draw calls per frame: \t%.2f\n", drawStats.Average)
+	fmt.Fprintf(w, "Stddev draw calls per frame: \t%.2f\n", drawStats.Stddev)
+	fmt.Fprintf(w, "Median draw calls per frame: \t%v\n", drawStats.Median)
+	w.Flush()
+
+	return nil
 }

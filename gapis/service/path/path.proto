@@ -59,8 +59,8 @@ message Any {
     StateTree state_tree = 31;
     StateTreeNode state_tree_node = 32;
     StateTreeNodeForPath state_tree_node_for_path = 33;
-    Thumbnail thumbnail = 34;
-    Stats stats = 35;
+    Stats stats = 34;
+    Thumbnail thumbnail = 35;
   }
 }
 
@@ -437,6 +437,14 @@ message StateTreeNodeForPath {
   Any member = 2;
 }
 
+// Stats requests statistics for a given capture.  Resolves to service.Stats.
+message Stats {
+  //
+  Capture capture = 1;
+
+  bool draw_call = 2;
+}
+
 // Thumbnail is a path to a thumbnail image representing the object.
 message Thumbnail {
   // The desired maximum width of the thumbnail image.
@@ -455,9 +463,4 @@ message Thumbnail {
   }
 
   bool disable_optimization = 7;
-}
-
-message Stats {
-    Capture capture = 1;
-    // Assume that its draw call stats for now
 }

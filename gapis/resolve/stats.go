@@ -16,17 +16,17 @@ package resolve
 
 import (
 	"context"
-	"strconv"
 
+	"github.com/google/gapid/core/data/pod"
 	"github.com/google/gapid/gapis/api"
 	"github.com/google/gapid/gapis/api/sync"
 	"github.com/google/gapid/gapis/capture"
-	"github.com/google/gapid/gapis/service"
+	"github.com/google/gapid/gapis/service/box"
 	"github.com/google/gapid/gapis/service/path"
 )
 
 // Stats resolves and returns the stats list from the path p.
-func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
+func Stats(ctx context.Context, p *path.Stats) (*box.Value, error) {
 	d, err := SyncData(ctx, p.Capture)
 	if err != nil {
 		return nil, err
@@ -52,8 +52,8 @@ func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
 	}
 
 	drawsPerFrame := make([]uint64, len(events.List))
-
 	drawsSinceLastFrame := uint64(0)
+
 	processed := map[sync.SyncIdx]struct{}{}
 
 	var process func(pt sync.SyncIdx) error
@@ -108,23 +108,36 @@ func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
 		return nil
 	}
 
+	processCmd := func(idx uint64) error {
+		cmd := cmds[idx]
+		err := cmd.Mutate(ctx, api.CmdID(idx), st, nil)
+		if err != nil {
+			return err
+		}
+		flags[idx] = cmd.CmdFlags(ctx, api.CmdID(idx), st)
+
+		// For commands from non-synchronized API's, just
+		// process the draw calls between each frame boundary.
+		if _, ok := cmd.API().(sync.SynchronizedAPI); !ok {
+			// NOTE: see above on CmdFlags
+			if flags[idx].IsDrawCall() {
+				drawsSinceLastFrame += 1
+			}
+		}
+		return nil
+	}
+
 	cmdIdx := uint64(0)
 	for i, event := range events.List {
-		for cmdIdx <= event.Command.Indices[0] {
-			cmd := cmds[cmdIdx]
-			err := cmd.Mutate(ctx, api.CmdID(cmdIdx), st, nil)
+		limitIdx := event.Command.Indices[0]
+		// Add any draws in the final unfinished frame to the last frame
+		if i == len(events.List)-1 {
+			limitIdx = uint64(len(cmds)) - 1
+		}
+		for cmdIdx <= limitIdx {
+			err := processCmd(cmdIdx)
 			if err != nil {
 				return nil, err
-			}
-			flags[cmdIdx] = cmd.CmdFlags(ctx, api.CmdID(cmdIdx), st)
-
-			// For commands from non-synchronized API's, just
-			// process the draw calls between each frame boundary.
-			if _, ok := cmd.API().(sync.SynchronizedAPI); !ok {
-				// NOTE: see above on CmdFlags
-				if flags[cmdIdx].IsDrawCall() {
-					drawsSinceLastFrame += 1
-				}
 			}
 			cmdIdx += 1
 		}
@@ -139,18 +152,9 @@ func Stats(ctx context.Context, p *path.Stats) (*service.ConstantSet, error) {
 			}
 		}
 		drawsPerFrame[i] = drawsSinceLastFrame
-		drawsSinceLastFrame = uint64(0)
+		drawsSinceLastFrame = 0
 	}
 
-	constants := make([]*service.Constant, len(drawsPerFrame))
-	for i, val := range drawsPerFrame {
-		constants[i] = &service.Constant{
-			Name:  strconv.Itoa(i),
-			Value: val,
-		}
-	}
-
-	return &service.ConstantSet{
-		Constants: constants,
-	}, nil
+	return &box.Value{0, &box.Value_Pod{&pod.Value{&pod.Value_Uint64Array{
+		&pod.Uint64Array{drawsPerFrame}}}}}, nil
 }
