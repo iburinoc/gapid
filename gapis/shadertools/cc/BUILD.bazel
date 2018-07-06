@@ -16,10 +16,13 @@ load("//tools/build:rules.bzl", "cc_copts")
 
 cc_library(
     name = "cc",
-    srcs = glob([
-        "*.cpp",
-        "*.h",
-    ]),
+    srcs = glob(
+        [
+            "*.cpp",
+            "*.h",
+        ],
+        exclude = ["*_test.cpp"],
+    ),
     hdrs = ["libmanager.h"],
     copts = cc_copts(),
     visibility = ["//visibility:public"],
@@ -41,5 +44,19 @@ cc_test(
     data = ["spirv_example.spv"],
     deps = [
         ":cc",
+    ],
+)
+
+# FIXME: REMOVE
+cc_binary(
+    name = "test_desc_analysis",
+    srcs = [
+        "desc_analyze_test.cpp",
+        "spv_descriptor_analyze.cpp",
+        "spv_descriptor_analyze.h",
+    ],
+    copts = cc_copts(),
+    deps = [
+        "@spirv_tools//:spirv-tools",
     ],
 )
