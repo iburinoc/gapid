@@ -96,6 +96,18 @@ typedef struct glsl_compile_result_t {
   spirv_binary_t binary;
 } glsl_compile_result_t;
 
+typedef struct spirv_descriptor_binding_t {
+  
+}
+
+typedef struct spirv_descriptor_set_t {
+
+}
+
+typedef struct spirv_descriptors_t {
+
+}
+
 code_with_debug_info_t* convertGlsl(const char*, size_t,
                                     const convert_options_t*);
 

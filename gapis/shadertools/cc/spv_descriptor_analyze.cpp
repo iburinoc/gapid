@@ -199,6 +199,7 @@ void AnalyzeModule(const std::vector<uint32_t>& spv_binary) {
   // map from variable id to <descriptor set, binding> pairs
   const auto& annots = getUniformAnnotations(context, uniforms);
 
+  // map from entry point id to id's of statically used uniforms
   const auto& statically_used = staticallyUsed(context, uniforms);
 
   for (const auto& entry : annots) {
