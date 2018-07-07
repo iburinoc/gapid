@@ -15,6 +15,10 @@ layout(set = 1, binding = 32) uniform Val1 {
 
 layout(set = 2, binding = 2) uniform sampler2D val2;
 
+vec4 getPos() {
+	return val0.val0 * vec4(0., 0., 0., 1.);
+}
+
 void main() {
-	gl_Position = val0.val0 * vec4(0., 0., 0., 1.);
+	gl_Position = getPos() * texture(val2, vec2(0, 0));
 }

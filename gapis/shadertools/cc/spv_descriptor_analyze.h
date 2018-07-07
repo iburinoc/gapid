@@ -17,13 +17,20 @@
 #ifndef SPV_DESCRIPTOR_ANALYZE_H_
 #define SPV_DESCRIPTOR_ANALYZE_H_
 
+#include "third_party/SPIRV-Tools/source/opt/instruction.h"
+
 #include <stdint.h>
+#include <string>
 #include <vector>
 
 namespace spv_descriptor_analyze {
 
-void analyze_module(const std::vector<uint32_t>& spv_binary);
+// Converts a SPIR-V string operand to std::string
+std::string ParseStringOperand(const spvtools::ir::Operand& op);
 
-}
+// FIXME
+void AnalyzeModule(const std::vector<uint32_t>& spv_binary);
+
+}  // namespace spv_descriptor_analyze
 
 #endif

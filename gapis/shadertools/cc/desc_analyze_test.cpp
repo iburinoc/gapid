@@ -31,5 +31,5 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  spv_descriptor_analyze::analyze_module(spirv_binary);
+  spv_descriptor_analyze::AnalyzeModule(spirv_binary);
 }
