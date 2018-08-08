@@ -17,8 +17,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/google/gapid/core/app"
@@ -79,30 +77,34 @@ func (verb *stateVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 		verb.At = []uint64{uint64(boxedCapture.(*service.Capture).NumCommands) - 1}
 	}
 
-	boxedTree, err := client.Get(ctx, c.Command(uint64(verb.At[0]), verb.At[1:]...).StateAfter().Tree().Path())
-	if err != nil {
-		return log.Err(ctx, err, "Failed to load the command tree")
-	}
-
-	tree := boxedTree.(*service.StateTree)
-
-	return traverseStateTree(ctx, client, tree.Root, verb.Depth, verb.Filter, func(n *service.StateTreeNode, prefix string) error {
-		name := n.Name + ":"
-		if n.Preview != nil {
-			v := n.Preview.Get()
-			if n.Constants != nil {
-				constants, err := getConstantSet(ctx, client, n.Constants)
-				if err != nil {
-					return log.Err(ctx, err, "Couldn't fetch constant set")
-				}
-				v = constants.Sprint(v)
-			}
-			fmt.Fprintln(os.Stdout, prefix, name, v)
-		} else {
-			fmt.Fprintln(os.Stdout, prefix, name)
+	client.Get(ctx, (&path.ExpandedCommand{Command: c.Command(uint64(verb.At[0]), verb.At[1:]...)}).Path())
+	/*
+		boxedTree, err := client.Get(ctx, c.Command(uint64(verb.At[0]), verb.At[1:]...).StateAfter().Tree().Path())
+		if err != nil {
+			return log.Err(ctx, err, "Failed to load the command tree")
 		}
-		return nil
-	}, "", true)
+
+		tree := boxedTree.(*service.StateTree)
+
+		return traverseStateTree(ctx, client, tree.Root, verb.Depth, verb.Filter, func(n *service.StateTreeNode, prefix string) error {
+			name := n.Name + ":"
+			if n.Preview != nil {
+				v := n.Preview.Get()
+				if n.Constants != nil {
+					constants, err := getConstantSet(ctx, client, n.Constants)
+					if err != nil {
+						return log.Err(ctx, err, "Couldn't fetch constant set")
+					}
+					v = constants.Sprint(v)
+				}
+				fmt.Fprintln(os.Stdout, prefix, name, v)
+			} else {
+				fmt.Fprintln(os.Stdout, prefix, name)
+			}
+			return nil
+		}, "", true)
+	*/
+	return nil
 }
 
 func traverseStateTree(

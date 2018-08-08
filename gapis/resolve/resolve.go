@@ -353,6 +353,8 @@ func ResolveInternal(ctx context.Context, p path.Node) (interface{}, error) {
 		return Thumbnail(ctx, p)
 	case *path.Stats:
 		return Stats(ctx, p)
+	case *path.ExpandedCommand:
+		return ExpandedCommand(ctx, p)
 	default:
 		return nil, fmt.Errorf("Unknown path type %T", p)
 	}

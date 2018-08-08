@@ -37,6 +37,7 @@ import (
     "github.com/google/gapid/core/math/u64"
     "github.com/google/gapid/core/memory/arena"
 	  "github.com/google/gapid/core/os/device"
+    "github.com/google/gapid/gapis/api"
     "github.com/google/gapid/gapis/replay"
     "github.com/google/gapid/gapis/replay/builder"
     "github.com/google/gapid/gapis/replay/protocol"
@@ -982,6 +983,14 @@ import (
       count: count,
       pool:  ϟmem.ApplicationPool,
     }
+  }
+
+  // WatchedSlice returns FIXME
+  func (p {{$ptr_ty}}) WatchedSlice(start, end uint64, ϟl *device.MemoryLayout, ϟlm api.LengthManager) {{$slice_ty}} {
+    if ϟlm != nil {
+      ϟlm.Slicing(p, start, end)
+    }
+    return p.Slice(start, end, ϟl)
   }
 
   // ISlice returns a new Slice from the pointer using start and end indices.

@@ -120,3 +120,7 @@ message SetResolvable {
 message FramebufferObservationResolvable {
   path.FramebufferObservation path = 1;
 }
+
+message ExpandedCommandResolvable {
+  path.ExpandedCommand path = 1;
+}

@@ -314,3 +314,8 @@ func (n *Stats) Validate() error {
 func (n *Thumbnail) Validate() error {
 	return checkNotNilAndValidate(n, protoutil.OneOf(n.Object), "object")
 }
+
+// Validate checks the path is valid.
+func (n *ExpandedCommand) Validate() error {
+	return checkNotNilAndValidate(n, n.Command, "command")
+}

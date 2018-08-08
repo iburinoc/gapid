@@ -94,6 +94,7 @@ func (n *StateTreeNode) Path() *Any             { return &Any{Path: &Any_StateTr
 func (n *StateTreeNodeForPath) Path() *Any      { return &Any{Path: &Any_StateTreeNodeForPath{n}} }
 func (n *Stats) Path() *Any                     { return &Any{Path: &Any_Stats{n}} }
 func (n *Thumbnail) Path() *Any                 { return &Any{Path: &Any_Thumbnail{n}} }
+func (n *ExpandedCommand) Path() *Any           { return &Any{Path: &Any_ExpandedCommand{n}} }
 
 func (n API) Parent() Node                       { return nil }
 func (n ArrayIndex) Parent() Node                { return oneOfNode(n.Array) }
@@ -132,6 +133,7 @@ func (n StateTreeNode) Parent() Node             { return nil }
 func (n StateTreeNodeForPath) Parent() Node      { return nil }
 func (n Stats) Parent() Node                     { return n.Capture }
 func (n Thumbnail) Parent() Node                 { return oneOfNode(n.Object) }
+func (n ExpandedCommand) Parent() Node           { return n.Command }
 
 func (n *API) SetParent(p Node)                       {}
 func (n *Blob) SetParent(p Node)                      {}
@@ -163,6 +165,7 @@ func (n *StateTree) SetParent(p Node)                 { n.State, _ = p.(*State) 
 func (n *StateTreeNode) SetParent(p Node)             {}
 func (n *StateTreeNodeForPath) SetParent(p Node)      {}
 func (n *Stats) SetParent(p Node)                     { n.Capture, _ = p.(*Capture) }
+func (n *ExpandedCommand) SetParent(p Node)           { n.Command, _ = p.(*Command) }
 
 // Format implements fmt.Formatter to print the version.
 func (n ArrayIndex) Format(f fmt.State, c rune) {
@@ -291,6 +294,11 @@ func (n Stats) Format(f fmt.State, c rune) { fmt.Fprintf(f, "%v.stats", n.Parent
 
 // Format implements fmt.Formatter to print the version.
 func (n Thumbnail) Format(f fmt.State, c rune) { fmt.Fprintf(f, "%v.thumbnail", n.Parent()) }
+
+// Format implements fmt.Formatter to print the version.
+func (n ExpandedCommand) Format(f fmt.State, c rune) {
+	fmt.Fprintf(f, "%v.expanded-command", n.Command)
+}
 
 func (n *As) SetParent(p Node) {
 	switch p := p.(type) {

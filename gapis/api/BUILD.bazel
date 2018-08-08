@@ -34,6 +34,7 @@ go_library(
         "context.go",
         "doc.go",
         "labeled.go",
+        "length_manager.go",
         "memory_breakdown.go",
         "mesh.go",
         "property.go",

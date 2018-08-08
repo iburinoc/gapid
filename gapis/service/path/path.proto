@@ -63,6 +63,7 @@ message Any {
     StateTreeNodeForPath state_tree_node_for_path = 35;
     Stats stats = 36;
     Thumbnail thumbnail = 37;
+    ExpandedCommand expanded_command = 38;
   }
 }
 
@@ -478,4 +479,8 @@ message Thumbnail {
   }
 
   bool disable_optimization = 7;
+}
+
+message ExpandedCommand {
+  Command command = 1;
 }

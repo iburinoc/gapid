@@ -186,8 +186,10 @@ public class MainWindow extends ApplicationWindow {
 
     if (OS.isMac) {
       MacApplication.init(shell.getDisplay(),
-          () -> showAbout(shell, models().analytics, widgets().theme),
-          () -> showSettingsDialog(shell, models(), widgets().theme),
+          ()
+              -> showAbout(shell, models().analytics, widgets().theme),
+          ()
+              -> showSettingsDialog(shell, models(), widgets().theme),
           file -> models().capture.loadCapture(new File(file)));
     }
   }
@@ -200,7 +202,7 @@ public class MainWindow extends ApplicationWindow {
 
   private Point getDefaultInitialSize() {
     Rectangle bounds = getShell().getDisplay().getPrimaryMonitor().getClientArea();
-    return new Point((int)(0.6 * bounds.width), (int)(0.8 * bounds.height));
+    return new Point((int) (0.6 * bounds.width), (int) (0.8 * bounds.height));
   }
 
   @Override
@@ -212,8 +214,8 @@ public class MainWindow extends ApplicationWindow {
   private Point getDefaultInitialLocation(Point size) {
     Rectangle bounds = getShell().getDisplay().getPrimaryMonitor().getClientArea();
     // Center horizontally, split vertical space 1/3 - 2/3.
-    return new Point(Math.max(0, bounds.width - size.x ) / 2,
-        Math.max(0, bounds.height - size.y) / 3);
+    return new Point(
+        Math.max(0, bounds.width - size.x) / 2, Math.max(0, bounds.height - size.y) / 3);
   }
 
   @Override
@@ -263,9 +265,8 @@ public class MainWindow extends ApplicationWindow {
     statusBar = new StatusBar(shell);
     statusBar.setLayoutData(new GridData(SWT.FILL, SWT.BOTTOM, true, false));
 
-    splitter.addListener(SWT.Dispose, e -> {
-      models().settings.splitterTopHeight = splitter.getTopHeight();
-    });
+    splitter.addListener(
+        SWT.Dispose, e -> { models().settings.splitterTopHeight = splitter.getTopHeight(); });
 
     models().capture.addListener(new Capture.Listener() {
       @Override
@@ -293,9 +294,8 @@ public class MainWindow extends ApplicationWindow {
   private void watchForUpdates() {
     new UpdateWatcher(maw.models().settings, client, (release) -> {
       scheduleIfNotDisposed(statusBar, () -> {
-        statusBar.setNotification("New update available", () -> {
-          Program.launch(release.getBrowserUrl());
-        });
+        statusBar.setNotification(
+            "New update available", () -> { Program.launch(release.getBrowserUrl()); });
       });
     });
   }
@@ -526,23 +526,22 @@ public class MainWindow extends ApplicationWindow {
     }
 
     private static String[] getNames(TabInfo[] tabs) {
-      return Arrays.stream(tabs).map(tab -> ((Type)tab.id).name()).toArray(len -> new String[len]);
+      return Arrays.stream(tabs).map(tab -> ((Type) tab.id).name()).toArray(len -> new String[len]);
     }
 
     private static double[] getWeights(FolderInfo[] folders) {
-      return new double[] { folders[0].weight, folders[1].weight, folders[2].weight };
+      return new double[] {folders[0].weight, folders[1].weight, folders[2].weight};
     }
 
     private static List<TabInfo> getTabs(
         String[] names, Set<Type> left, Client client, Models models, Widgets widgets) {
-
       List<TabInfo> result = Lists.newArrayList();
       for (String name : names) {
         try {
           Type type = Type.valueOf(name);
           if (left.remove(type)) {
-            result.add(new MainTab(type,
-                parent -> type.factory.create(parent, client, models, widgets).getControl()));
+            result.add(new MainTab(
+                type, parent -> type.factory.create(parent, client, models, widgets).getControl()));
           }
         } catch (IllegalArgumentException e) {
           // Ignore incorrect names in the properties.
@@ -555,7 +554,9 @@ public class MainWindow extends ApplicationWindow {
      * Possible tab locations.
      */
     public static enum Location {
-      Left, Center, Right;
+      Left,
+      Center,
+      Right;
     }
 
     /**
@@ -570,6 +571,7 @@ public class MainWindow extends ApplicationWindow {
       Shaders(Location.Center, View.Shaders, "Shaders", ShaderView::new),
       Report(Location.Center, View.Report, "Report", (p, c, m, w) -> new ReportView(p, m, w)),
       Log(Location.Center, View.Log, "Log", (p, c, m, w) -> new LogView(p, w)),
+      CommandView(Location.Center, View.Command, "Parameters", StateView::new),
 
       ApiState(Location.Right, View.State, "State", StateView::new),
       Memory(Location.Right, View.Memory, "Memory", MemoryView::new);
@@ -631,7 +633,6 @@ public class MainWindow extends ApplicationWindow {
     HelpShowLogs("Open &Log Directory"),
     HelpLicenses("&Licenses"),
     HelpWelcome("Show &Welcome Screen");
-
 
     private final String label;
     private final int accelerator;
