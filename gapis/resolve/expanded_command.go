@@ -55,11 +55,71 @@ func (r *ExpandedCommandResolvable) Resolve(ctx context.Context) (interface{}, e
 	cmd.Extras().Observations().ApplyReads(st.Memory.ApplicationPool())
 	cmd.Extras().Observations().ApplyWrites(st.Memory.ApplicationPool())
 
-	for _, prop := range cmd.CmdParams() {
-		printParamTree(ctx, cmd, "", prop, st, cm)
+	props := cmd.CmdParams()
+	params := make([]api.Parameter, len(params))
+	for i, prop := range props {
+		paramStructs[i] = structify(ctx, s, cm, cmd, prop)
 	}
 
 	return nil, err
+}
+
+func structify(ctx context.Context, s *api.GlobalState, cm api.CommandManager, cmd api.Cmd, prop *api.Property) api.Parameter {
+	param := api.Parameter{
+		Name: prop.Name,
+	}
+
+	var process func(*api.Property) (reflect.Value, reflect.Type)
+
+	processStruct := func(v reflect.Value) (reflect.Value, reflect.Type) {
+
+	}
+
+	process = func(p *api.Property) (reflect.Value, reflect.Type) {
+		val := p.Get()
+		rval, rtype := reflect.ValueOf(val), p.Type
+		ptr, isPtr := val.(memory.Pointer)
+		if !isPtr && p.Type.Kind() != reflect.Struct {
+			return reflect.ValueOf(val), reflect.TypeOf(val)
+		}
+		var values []reflect.Value
+		var typ reflect.Type
+		if isPtr {
+			alen, ok := cm[ptr.Address()]
+			if !ok {
+				// We didn't access the data, just return the pointer as-is
+				return rval, rtype
+			}
+			slice := rval.MethodByName("Slice").Call([]reflect.Value{
+				reflect.ValueOf(uint64(0)),
+				reflect.ValueOf(alen),
+				reflect.ValueOf(s.MemoryLayout),
+				reflect.ValueOf(api.CommandManager(nil)),
+			})[0]
+			read := slice.MethodByName("MustRead")
+			if !read.IsValid() {
+				return rval, rtype
+			}
+			elems = read.Call([]reflect.Value{
+				reflect.ValueOf(ctx),
+				reflect.ValueOf(cmd),
+				reflect.ValueOf(s),
+				reflect.ValueOf((*builder.Builder)(nil)),
+			})[0]
+			values = make([]reflect.Value, elems.Len())
+			for i := range elems {
+				values[i] = elems.Index(i)
+			}
+			typ = elems.Type().Elem()
+		} else {
+			values = []reflect.Value{rval}
+			typ = rtype
+		}
+		res := reflect.MakeSlice(reflect.SliceOf(typ), 0, len(values))
+		for _, val := range values {
+
+		}
+	}
 }
 
 func printParamTree(ctx context.Context, cmd api.Cmd, indent string, prop *api.Property, s *api.GlobalState, cm api.CommandManager) {
