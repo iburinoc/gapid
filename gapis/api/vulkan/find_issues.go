@@ -91,7 +91,7 @@ func (t *findIssues) Transform(ctx context.Context, id api.CmdID, cmd api.Cmd, o
 	ctx = log.Enter(ctx, "findIssues")
 	cb := CommandBuilder{Thread: cmd.Thread(), Arena: t.state.Arena}
 
-	mutateErr := cmd.Mutate(ctx, id, t.state, nil /* no builder */)
+	mutateErr := cmd.Mutate(ctx, id, t.state, nil /* no builder */, nil)
 	if mutateErr != nil {
 		// Ignore since downstream transform layers can only consume valid commands
 		return
@@ -131,7 +131,7 @@ func (t *findIssues) Transform(ctx context.Context, id api.CmdID, cmd api.Cmd, o
 		info := cmd.PCreateInfo().MustRead(ctx, cmd, s, nil)
 		layerCount := info.EnabledLayerCount()
 		layers := []Charᶜᵖ{}
-		for _, l := range info.PpEnabledLayerNames().Slice(0, uint64(layerCount), l).MustRead(ctx, cmd, s, nil) {
+		for _, l := range info.PpEnabledLayerNames().Slice(0, uint64(layerCount), l, nil).MustRead(ctx, cmd, s, nil) {
 			if !isValidationLayer(l.String()) {
 				layers = append(layers, l)
 			}
@@ -146,7 +146,7 @@ func (t *findIssues) Transform(ctx context.Context, id api.CmdID, cmd api.Cmd, o
 		layersData := mustAlloc(ctx, layers)
 
 		extCount := info.EnabledExtensionCount()
-		exts := info.PpEnabledExtensionNames().Slice(0, uint64(extCount), l).MustRead(ctx, cmd, s, nil)
+		exts := info.PpEnabledExtensionNames().Slice(0, uint64(extCount), l, nil).MustRead(ctx, cmd, s, nil)
 		var debugReportExtNameData api.AllocResult
 		hasDebugReport := false
 		for _, e := range exts {
@@ -195,7 +195,7 @@ func (t *findIssues) Transform(ctx context.Context, id api.CmdID, cmd api.Cmd, o
 		info := cmd.PCreateInfo().MustRead(ctx, cmd, s, nil)
 		layerCount := info.EnabledLayerCount()
 		layers := []Charᶜᵖ{}
-		for _, l := range info.PpEnabledLayerNames().Slice(0, uint64(layerCount), l).MustRead(ctx, cmd, s, nil) {
+		for _, l := range info.PpEnabledLayerNames().Slice(0, uint64(layerCount), l, nil).MustRead(ctx, cmd, s, nil) {
 			if !isValidationLayer(l.String()) {
 				layers = append(layers, l)
 			}

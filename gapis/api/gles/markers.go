@@ -25,7 +25,7 @@ import (
 func readString(ctx context.Context, c api.Cmd, s *api.GlobalState, at memory.Pointer, length GLsizei) string {
 	ptr := NewCharᵖ(at)
 	if length > 0 {
-		chars, err := ptr.Slice(0, uint64(length), s.MemoryLayout).Read(ctx, c, s, nil)
+		chars, err := ptr.Slice(0, uint64(length), s.MemoryLayout, nil).Read(ctx, c, s, nil)
 		if err != nil {
 			return ""
 		}

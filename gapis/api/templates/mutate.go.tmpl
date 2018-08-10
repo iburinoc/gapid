@@ -103,14 +103,10 @@
       ϟs *State, §
       ϟt uint64, §
       ϟb *builder.Builder, §
+      ϟm api.Manager, §
       {{ForEach $.CallParameters "NameAndType" | JoinWith ", "}} §
     ) ({{if not (IsVoid $.Return.Type)}}{{Template "Go.Type" $.Return.Type}}, {{end}}error) {
     ϟl, ϟa := ϟg.MemoryLayout, ϟg.Arena; _, _ = ϟl, ϟa
-    var ϟlm api.LengthManager
-    if ϟc != nil {
-      ϟlm = ϟc.Extras().LengthManager()
-    }
-    _ = ϟlm
     {{Global "CurrentFunction" $}}
     {{Template "Block" $.Block}}
   }
@@ -153,14 +149,13 @@
       {{end}}
       func (ϟc *{{$name}}) Mutate(§
     {{end}}
-        ϟctx context.Context, ϟi api.CmdID, ϟg *api.GlobalState, ϟb *builder.Builder) error {
+        ϟctx context.Context, ϟi api.CmdID, ϟg *api.GlobalState, ϟb *builder.Builder, ϟm api.Manager) error {
 
       {{if not $r}}ϟb = nil // @no_replay{{end}}
 
       ϟs, ϟt := GetState(ϟg), ϟc.Thread()
       ϟl, ϟa := ϟg.MemoryLayout, ϟg.Arena; _, _ = ϟl, ϟa
       ϟo := ϟc.Extras().Observations()
-      ϟlm := ϟc.Extras().LengthManager(); _ = ϟlm
       _, _ = ϟl, ϟt
 
       if err := ϟs.preMutate(ϟctx, ϟg, ϟc); err != nil {
@@ -519,7 +514,7 @@
     {{if $call.Target.Function.Subroutine}}
       {{/* Transform: v := sub() -> v, err := sub() */}}
       {{$args := ForEach $call.Arguments "Go.Read" | JoinWith ", "}}
-      {{$.Local.Name}}, ϟerr := {{Template "Go.Subroutine" $call.Target.Function}}(ϟctx, ϟc, ϟi, ϟo, ϟg, ϟs, ϟt, ϟb, {{$args}})
+      {{$.Local.Name}}, ϟerr := {{Template "Go.Subroutine" $call.Target.Function}}(ϟctx, ϟc, ϟi, ϟo, ϟg, ϟs, ϟt, ϟb, ϟm, {{$args}})
       if ϟerr != nil {
         {{Template "Go.ReturnErr" "ϟerr"}}
       }
@@ -641,7 +636,7 @@
         {{/* TODO: Unlike Slice.Copy, this does not optimise for non-pointer copies. */}}
         ϟdst, ϟgsrc := {{Template "Go.Read" $.Statement.Dst}}, {{Template "Go.Read" $.Statement.Src}}
         ϟcount := u64.Min(ϟdst.Count(), ϟgsrc.Count())
-        ϟdst, ϟgsrc = ϟdst.Slice(0, ϟcount), ϟgsrc.Slice(0, ϟcount)
+        ϟdst, ϟgsrc = ϟdst.Slice(0, ϟcount), ϟgsrc.Slice(0, ϟcount, nil)
         ϟgsrcElems := ϟgsrc.MustRead(ϟctx, ϟc, ϟg, ϟb)
       {{end}}
 

@@ -353,7 +353,7 @@ func (API) ResolveSynchronization(ctx context.Context, d *sync.Data, c *path.Cap
 
 	err = api.ForeachCmd(ctx, cmds, func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
 		i = id
-		if err := cmd.Mutate(ctx, id, st, nil); err != nil {
+		if err := cmd.Mutate(ctx, id, st, nil, nil); err != nil {
 			return err
 		}
 		return nil
@@ -475,7 +475,7 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 		switch c := cmd.(type) {
 		case *VkQueueSubmit:
 			submitCount := uint64(c.SubmitCount())
-			submits := c.PSubmits().Slice(uint64(0), submitCount, l).MustRead(ctx, cmd, st, nil)
+			submits := c.PSubmits().Slice(uint64(0), submitCount, l, nil).MustRead(ctx, cmd, st, nil)
 
 			submitSrcs := make([]sync.SyncNodeIdx, len(submits))
 			submitDsts := make([]sync.SyncNodeIdx, len(submits))
@@ -489,7 +489,7 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 
 				waitSems := s.PWaitSemaphores().Slice(
 					uint64(0),
-					uint64(s.WaitSemaphoreCount()), l).
+					uint64(s.WaitSemaphoreCount()), l, nil).
 					MustRead(ctx, cmd, st, nil)
 				for _, s := range waitSems {
 					semDepend(src, s)
@@ -497,7 +497,7 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 
 				signalSems := s.PSignalSemaphores().Slice(
 					uint64(0),
-					uint64(s.SignalSemaphoreCount()), l).
+					uint64(s.SignalSemaphoreCount()), l, nil).
 					MustRead(ctx, cmd, st, nil)
 				for _, s := range signalSems {
 					semSignaler[s] = dst
@@ -558,22 +558,22 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 			// If we do vkWaitQueueIdle then we depend on all previous submits.
 			addSubmit(donePt, queue)
 		case *VkQueuePresentKHR:
-			info := c.PPresentInfo().Slice(uint64(0), uint64(1), l).MustRead(ctx, cmd, st, nil)[0]
+			info := c.PPresentInfo().Slice(uint64(0), uint64(1), l, nil).MustRead(ctx, cmd, st, nil)[0]
 			waitSems := info.PWaitSemaphores().Slice(
 				uint64(0),
 				uint64(info.WaitSemaphoreCount()),
-				l).MustRead(ctx, cmd, st, nil)
+				l, nil).MustRead(ctx, cmd, st, nil)
 			for _, s := range waitSems {
 				semDepend(cmdPt, s)
 			}
 		case *VkCreateFence:
 			signaledBit := VkFenceCreateFlags(VkFenceCreateFlagBits_VK_FENCE_CREATE_SIGNALED_BIT)
 			signaled := ((c.PCreateInfo().
-				Slice(uint64(0), uint64(1), l).
+				Slice(uint64(0), uint64(1), l, nil).
 				MustRead(ctx, cmd, st, nil)[0].
 				Flags()) & signaledBit) == signaledBit
 			if signaled {
-				fence := c.PFence().Slice(uint64(0), uint64(1), l).MustRead(ctx, cmd, st, nil)[0]
+				fence := c.PFence().Slice(uint64(0), uint64(1), l, nil).MustRead(ctx, cmd, st, nil)[0]
 				fenceSignaler[fence] = cmdPt
 			}
 		case *VkGetFenceStatus:
@@ -585,14 +585,14 @@ func dependencySync(ctx context.Context, d *sync.Data, c *path.Capture) error {
 			fenceCount := uint64(c.FenceCount())
 			if fenceCount == 1 || c.WaitAll() != VkBool32(0) {
 				// We can be sure all the fences were signaled
-				fences := c.PFences().Slice(uint64(0), fenceCount, l).MustRead(ctx, cmd, st, nil)
+				fences := c.PFences().Slice(uint64(0), fenceCount, l, nil).MustRead(ctx, cmd, st, nil)
 				for _, f := range fences {
 					fenceDepend(cmdPt, f)
 				}
 				lastHostBarrier = cmdPt
 			}
 		case *VkResetFences:
-			fences := c.PFences().Slice(uint64(0), uint64(c.FenceCount()), l).MustRead(ctx, cmd, st, nil)
+			fences := c.PFences().Slice(uint64(0), uint64(c.FenceCount()), l, nil).MustRead(ctx, cmd, st, nil)
 			for _, f := range fences {
 				delete(fenceSignaler, f)
 			}
@@ -679,7 +679,7 @@ func (API) MutateSubcommands(ctx context.Context, id api.CmdID, cmd api.Cmd,
 			preSubCmdCb(s, append(api.SubCmdIdx{uint64(id)}, c.SubCmdIdx...), cmd)
 		}
 	}
-	if err := cmd.Mutate(ctx, id, s, nil); err != nil && err == context.Canceled {
+	if err := cmd.Mutate(ctx, id, s, nil, nil); err != nil && err == context.Canceled {
 		return err
 	}
 	return nil

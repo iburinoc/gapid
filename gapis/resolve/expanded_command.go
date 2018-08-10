@@ -40,49 +40,39 @@ func ExpandedCommand(ctx context.Context, p *path.ExpandedCommand) (*api.Command
 }
 
 func (r *ExpandedCommandResolvable) Resolve(ctx context.Context) (interface{}, error) {
-	prev := []uint64{r.Path.Command.Indices[0] - 1}
-	st, err := GlobalState(ctx, &path.GlobalState{After: &path.Command{
-		Capture: r.Path.Command.Capture,
-		Indices: prev,
-	}})
-
-	if err != nil {
-		return nil, err
-	}
+	st, err := GlobalState(ctx, &path.GlobalState{After: r.Path.Command})
 	cmd, err := Cmd(ctx, r.Path.Command)
 	if err != nil {
 		return nil, err
 	}
 
-	cmd.Extras().Add(api.LengthManager{})
-	err = cmd.Mutate(ctx, api.CmdID(r.Path.Command.Indices[0]), st, nil)
+	m, err := Manager(ctx, r.Path.Command.Capture)
 	if err != nil {
 		return nil, err
 	}
-
-	lm := cmd.Extras().LengthManager()
+	cm := m.Get(cmd)
 
 	cmd.Extras().Observations().ApplyReads(st.Memory.ApplicationPool())
 	cmd.Extras().Observations().ApplyWrites(st.Memory.ApplicationPool())
 
 	for _, prop := range cmd.CmdParams() {
-		printParamTree(ctx, cmd, "", prop, st, lm)
+		printParamTree(ctx, cmd, "", prop, st, cm)
 	}
 
 	return nil, err
 }
 
-func printParamTree(ctx context.Context, cmd api.Cmd, indent string, prop *api.Property, s *api.GlobalState, lm api.LengthManager) {
+func printParamTree(ctx context.Context, cmd api.Cmd, indent string, prop *api.Property, s *api.GlobalState, cm api.CommandManager) {
 	fmt.Printf("%v%v: ", indent, prop.Name)
 	val := prop.Get()
 	ptr, isPtr := val.(memory.Pointer)
 	fmt.Printf("%v\n", val)
 	if isPtr {
-		if alen, ok := lm[ptr.Address()]; ok {
+		if alen, ok := cm[ptr.Address()]; ok {
 			// Need to get the slice of values
 			rval := reflect.ValueOf(val)
 			slice := rval.MethodByName("Slice").Call(
-				[]reflect.Value{reflect.ValueOf(uint64(0)), reflect.ValueOf(alen), reflect.ValueOf(s.MemoryLayout)},
+				[]reflect.Value{reflect.ValueOf(uint64(0)), reflect.ValueOf(alen), reflect.ValueOf(s.MemoryLayout), reflect.ValueOf(api.CommandManager(nil))},
 			)[0]
 			read := slice.MethodByName("MustRead")
 			if read.IsValid() {
@@ -96,7 +86,7 @@ func printParamTree(ctx context.Context, cmd api.Cmd, indent string, prop *api.P
 						fmt.Printf("\n")
 						props := val.MethodByName("Properties").Call([]reflect.Value{})[0].Interface().(api.Properties)
 						for _, prop := range props {
-							printParamTree(ctx, cmd, indent+"\t", prop, s, lm)
+							printParamTree(ctx, cmd, indent+"\t", prop, s, cm)
 						}
 					} else {
 						fmt.Printf(" %v\n", val.Interface())
@@ -106,4 +96,20 @@ func printParamTree(ctx context.Context, cmd api.Cmd, indent string, prop *api.P
 		}
 	}
 	_ = ptr
+}
+
+func Manager(ctx context.Context, c *path.Capture) (api.Manager, error) {
+	data, err := database.Build(ctx, &ManagerResolvable{Path: c})
+	if err != nil {
+		return nil, err
+	}
+	m, ok := data.(api.Manager)
+	if !ok {
+		return nil, log.Errf(ctx, nil, "Could not get capture manager")
+	}
+	return m, nil
+}
+
+func (r *ManagerResolvable) Resolve(ctx context.Context) (interface{}, error) {
+	return api.Manager{}, nil
 }

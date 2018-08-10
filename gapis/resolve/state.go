@@ -67,8 +67,12 @@ func (r *GlobalStateResolvable) Resolve(ctx context.Context) (interface{}, error
 		return nil, err
 	}
 
+	m, err := Manager(ctx, r.Path.After.Capture)
+	if err != nil {
+		return nil, err
+	}
 	err = api.ForeachCmd(ctx, cmds, func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
-		cmd.Mutate(ctx, id, s, nil)
+		cmd.Mutate(ctx, id, s, nil, m)
 		return nil
 	})
 	if err != nil {

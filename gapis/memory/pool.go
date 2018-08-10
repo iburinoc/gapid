@@ -238,7 +238,7 @@ func (m poolSlice) ResourceID(ctx context.Context) (id.ID, error) {
 
 func (m poolSlice) Slice(rng Range) Data {
 	if uint64(rng.Last()) > m.rng.Size {
-		panic(fmt.Errorf("%v.Slice(%v) - out of bounds", m.String(), rng))
+		panic(fmt.Errorf("%v.Slice(%v) - out of bounds", m.String(), rng, nil))
 	}
 	rng.Base += m.rng.Base
 	i, c := interval.Intersect(&m.writes, rng.Span())

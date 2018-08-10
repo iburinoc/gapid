@@ -551,7 +551,7 @@ func TestStateTreeNode(t *testing.T) {
 			&service.StateTreeNode{
 				NumChildren:    10,
 				Name:           "[400 - 499]",
-				ValuePath:      rootPath.Field("ReferenceB").Field("Slice").Slice(0, 999).Slice(400, 499).Path(),
+				ValuePath:      rootPath.Field("ReferenceB").Field("Slice").Slice(0, 999).Slice(400, 499, nil).Path(),
 				Preview:        box.NewValue(memory.NewSlice(0x1000, 0x1C80, 100*intSize, 100, memory.ApplicationPool, intType)),
 				PreviewIsValue: true,
 			},
@@ -560,7 +560,7 @@ func TestStateTreeNode(t *testing.T) {
 			&service.StateTreeNode{
 				NumChildren:    10,
 				Name:           "[430 - 439]",
-				ValuePath:      rootPath.Field("ReferenceB").Field("Slice").Slice(0, 999).Slice(400, 499).Slice(30, 39).Path(),
+				ValuePath:      rootPath.Field("ReferenceB").Field("Slice").Slice(0, 999).Slice(400, 499, nil).Slice(30, 39).Path(),
 				Preview:        box.NewValue(memory.NewSlice(0x1000, 0x1D70, 10*intSize, 10, memory.ApplicationPool, intType)),
 				PreviewIsValue: true,
 			},
@@ -569,7 +569,7 @@ func TestStateTreeNode(t *testing.T) {
 			&service.StateTreeNode{
 				NumChildren:    0,
 				Name:           "435",
-				ValuePath:      rootPath.Field("ReferenceB").Field("Slice").Slice(0, 999).Slice(400, 499).Slice(30, 39).ArrayIndex(5).Path(),
+				ValuePath:      rootPath.Field("ReferenceB").Field("Slice").Slice(0, 999).Slice(400, 499, nil).Slice(30, 39).ArrayIndex(5).Path(),
 				Preview:        box.NewValue(memory.Int(4350)),
 				PreviewIsValue: true,
 			},

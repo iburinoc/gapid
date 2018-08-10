@@ -108,7 +108,7 @@ func drawCallMesh(ctx context.Context, dc drawCall, p *path.Mesh) (*api.Mesh, er
 			var slice U8ˢ
 			if vbb.Buffer().IsNil() {
 				// upper bound doesn't really matter here, so long as it's big.
-				slice = U8ˢ(vaa.Pointer().Slice(0, 1<<30, s.MemoryLayout))
+				slice = U8ˢ(vaa.Pointer().Slice(0, 1<<30, s.MemoryLayout, nil))
 			} else {
 				slice = vbb.Buffer().Data()
 			}

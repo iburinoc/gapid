@@ -531,7 +531,7 @@
   {{else if IsSliceContains    $}}{{Template "Go.Read" $.Slice  }}.Contains(ϟctx, {{Template "Go.Read" $.Value}}, ϟc, ϟg, ϟb)
   {{else if IsSliceIndex       $}}{{Template "Go.Read" $.Slice  }}.Index({{Template "Go.Read" $.Index}}).{{Macro "Go.MemoryRead"}}[0]
   {{else if IsSliceRange       $}}{{Template "Go.Read" $.Slice  }}.Slice({{Template "Go.Read" $.Range.LHS}}, {{Template "Go.Read" $.Range.RHS}})
-  {{else if IsPointerRange     $}}{{Template "Go.Read" $.Pointer}}.WatchedSlice({{Template "Go.Read" $.Range.LHS}}, {{Template "Go.Read" $.Range.RHS}}, ϟl, ϟlm)
+  {{else if IsPointerRange     $}}{{Template "Go.Read" $.Pointer}}.Slice({{Template "Go.Read" $.Range.LHS}}, {{Template "Go.Read" $.Range.RHS}}, ϟl, ϟm.Get(ϟc))
   {{else if IsClone            $}}{{Template "Go.Read" $.Slice  }}.Clone(ϟctx, ϟc, ϟg, ϟb)
   {{else if IsMake             $}}Make{{Template "Go.Type" $.Type}}({{Template "Go.Read" $.Size}}, ϟg)
   {{else if IsSelect           $}}{{Template "Go.Select" $}}
@@ -593,7 +593,7 @@
   {{else if $.Target.Function.Extern}}
     (externs{ϟctx, ϟc, ϟi, ϟg, ϟb}.{{$.Target.Function.Name}}({{$args}}))
   {{else if $.Target.Function.Subroutine}}
-    if ϟerr := {{Template "Go.Subroutine" $.Target.Function}}(ϟctx, ϟc, ϟi, ϟo, ϟg, ϟs, ϟt, ϟb, {{$args}}); ϟerr != nil {
+    if ϟerr := {{Template "Go.Subroutine" $.Target.Function}}(ϟctx, ϟc, ϟi, ϟo, ϟg, ϟs, ϟt, ϟb, ϟm, {{$args}}); ϟerr != nil {
       {{Template "Go.ReturnErr" "ϟerr"}}
     }
   {{else}}

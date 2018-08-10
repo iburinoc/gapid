@@ -57,7 +57,7 @@ type Cmd interface {
 
 	// Mutate mutates the State using the command. If the builder argument is
 	// not nil then it will call the replay function on the builder.
-	Mutate(context.Context, CmdID, *GlobalState, *builder.Builder) error
+	Mutate(context.Context, CmdID, *GlobalState, *builder.Builder, Manager) error
 }
 
 const (

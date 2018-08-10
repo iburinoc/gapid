@@ -57,7 +57,7 @@ func Memory(ctx context.Context, p *path.Memory) (*service.Memory, error) {
 		return nil, err
 	}
 	err = api.ForeachCmd(ctx, cmds[:len(cmds)-1], func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
-		cmd.Mutate(ctx, id, s, nil)
+		cmd.Mutate(ctx, id, s, nil, nil)
 		return nil
 	})
 	if err != nil {

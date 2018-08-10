@@ -73,15 +73,6 @@ func (e *CmdExtras) Observations() *CmdObservations {
 	return nil
 }
 
-func (e *CmdExtras) LengthManager() LengthManager {
-	for _, o := range e.All() {
-		if o, ok := o.(LengthManager); ok {
-			return o
-		}
-	}
-	return nil
-}
-
 // GetOrAppendObservations returns a pointer to the existing Observations
 // structure in the CmdExtras, or appends and returns a pointer to a new
 // observations structure if the CmdExtras does not already contain one.

@@ -104,7 +104,7 @@ func TestPoolBlobWriteRead(t *testing.T) {
 	} {
 		p.Write(0, test.data)
 
-		checkData(ctx, p.Slice(Range{Base: 0, Size: 6}), test.expected)
+		checkData(ctx, p.Slice(Range{Base: 0, Size: 6}), test.expected, nil)
 	}
 }
 
@@ -214,7 +214,7 @@ func TestPoolSliceReaderErrorPropagation(t *testing.T) {
 	p := Pool{}
 	p.Write(2, Resource(id.ID{}, 5))
 
-	got, err := readFully(p.Slice(Range{Base: 0, Size: 10}).NewReader(ctx), 512)
+	got, err := readFully(p.Slice(Range{Base: 0, Size: 10}).NewReader(ctx), 512, nil)
 	assert.For(ctx, "len").That(len(got)).Equals(2)
 	assert.For(ctx, "err").ThatError(err).Failed()
 }
@@ -265,5 +265,5 @@ func TestSliceNesting(t *testing.T) {
 	outerPool.Write(1, Blob([]byte{1, 2, 3, 44}))
 	outerPool.Write(4, midPool.Slice(Range{Base: 1, Size: 7}))
 
-	checkData(ctx, outerPool.Slice(Range{Size: 11}), []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+	checkData(ctx, outerPool.Slice(Range{Size: 11}), []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 }

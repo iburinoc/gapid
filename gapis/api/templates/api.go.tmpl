@@ -813,7 +813,7 @@ import (
       panic(fmt.Errorf("%v.Slice start (%d) is greater than the end (%d)", s, start, end))
     }
     if end > s.Count() {
-      panic(fmt.Errorf("%v.Slice(%d, %d) - out of bounds", s, start, end))
+      panic(fmt.Errorf("%v.Slice(%d, %d) - out of bounds", s, start, end, nil))
     }
     newCount := end-start
     elSize := uint64(0)
@@ -924,7 +924,7 @@ import (
     // Read reads and returns the {{$el_ty}} element at the pointer.
     func (p {{$ptr_ty}}) Read(ϟctx context.Context, ϟc ϟapi.Cmd, ϟg *ϟapi.GlobalState, ϟb *builder.Builder) ({{$el_ty}}, error) {
       ϟa := ϟg.Arena; _ = ϟa
-      vals, err := p.Slice(0, 1, ϟg.MemoryLayout).Read(ϟctx, ϟc, ϟg, ϟb)
+      vals, err := p.Slice(0, 1, ϟg.MemoryLayout, nil).Read(ϟctx, ϟc, ϟg, ϟb)
       if err != nil {
         return {{Template "Go.Null" (TypeOf $p.To)}}, err
       }
@@ -940,7 +940,7 @@ import (
 
     // Write writes value to the {{$el_ty}} element at the pointer.
     func (p {{$ptr_ty}}) Write(ϟctx context.Context, value {{$el_ty}}, ϟc ϟapi.Cmd, ϟg *ϟapi.GlobalState, ϟb *builder.Builder) error {
-      _, err := p.Slice(0, 1, ϟg.MemoryLayout).Write(ϟctx, []{{$el_ty}}{value}, ϟc, ϟg, ϟb)
+      _, err := p.Slice(0, 1, ϟg.MemoryLayout, nil).Write(ϟctx, []{{$el_ty}}{value}, ϟc, ϟg, ϟb)
       return err
     }
 
@@ -963,16 +963,19 @@ import (
 
         i++
         if b := ϟd.U8(); b == 0 {
-          return Charˢ(p.Slice(0, i, ϟg.MemoryLayout))
+          return Charˢ(p.Slice(0, i, ϟg.MemoryLayout, nil))
         }
       }
     }
   {{end}}
 
   // Slice returns a new {{$slice_ty}} from the pointer using start and end indices.
-  func (p {{$ptr_ty}}) Slice(start, end uint64, ϟl *device.MemoryLayout) {{$slice_ty}} {
+  func (p {{$ptr_ty}}) Slice(start, end uint64, ϟl *device.MemoryLayout, ϟcm api.CommandManager) {{$slice_ty}} {
     if start > end {
       panic(fmt.Errorf("Slice start (%d) is greater than the end (%d)", start, end))
+    }
+    if ϟcm != nil {
+      ϟcm.Slicing(p, start, end)
     }
     elSize := p.ElementSize(ϟl)
     count := end-start
@@ -985,16 +988,8 @@ import (
     }
   }
 
-  // WatchedSlice returns FIXME
-  func (p {{$ptr_ty}}) WatchedSlice(start, end uint64, ϟl *device.MemoryLayout, ϟlm api.LengthManager) {{$slice_ty}} {
-    if ϟlm != nil {
-      ϟlm.Slicing(p, start, end)
-    }
-    return p.Slice(start, end, ϟl)
-  }
-
   // ISlice returns a new Slice from the pointer using start and end indices.
-  func (p {{$ptr_ty}}) ISlice(start, end uint64, ϟl *device.MemoryLayout) ϟmem.Slice { return p.Slice(start, end, ϟl) }
+  func (p {{$ptr_ty}}) ISlice(start, end uint64, ϟl *device.MemoryLayout) ϟmem.Slice { return p.Slice(start, end, ϟl, nil) }
 
   // Link returns a path to the object that this is a link to, or error
   // if you can not follow this path. Typically the incoming path ϟp
@@ -1684,7 +1679,7 @@ import (
   {{if IsCall $.Expr}}
     {{$call := Unpack $.Expr}}
     {{$args := ForEach $call.Arguments "Go.Read" | JoinWith ", "}}
-    v, _ := {{Template "Go.Subroutine" $call.Target.Function}}(ϟctx, ϟc, ϟi, ϟc.Extras().Observations(), ϟg, GetState(ϟg), ϟc.Thread(), nil, {{$args}})
+    v, _ := {{Template "Go.Subroutine" $call.Target.Function}}(ϟctx, ϟc, ϟi, ϟc.Extras().Observations(), ϟg, GetState(ϟg), ϟc.Thread(), nil, nil, {{$args}})
   {{else}}
     {{Error "%T" $.Expr}}
   {{end}}

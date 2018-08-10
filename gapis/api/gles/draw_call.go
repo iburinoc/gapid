@@ -80,7 +80,7 @@ func getIndices(
 	var reader binary.Reader
 	if indexBuffer.IsNil() {
 		// Get the index buffer data from pointer
-		reader = ptr.Slice(offset, size, s.MemoryLayout).Reader(ctx, s)
+		reader = ptr.Slice(offset, size, s.MemoryLayout, nil).Reader(ctx, s)
 	} else {
 		// Get the index buffer data from buffer, offset by the 'indices' pointer.
 		offset += ptr.Address()

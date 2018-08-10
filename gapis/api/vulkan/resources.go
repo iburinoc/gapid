@@ -793,7 +793,7 @@ func (cmd *VkCreateShaderModule) Replace(ctx context.Context, c *capture.Capture
 	ctx = log.Enter(ctx, "VkCreateShaderModule.Replace()")
 	cb := CommandBuilder{Thread: cmd.Thread(), Arena: c.Arena} // TODO: We probably should have a new arena passed in here!
 	state := c.NewState(ctx)
-	cmd.Mutate(ctx, api.CmdNoID, state, nil)
+	cmd.Mutate(ctx, api.CmdNoID, state, nil, nil)
 
 	shader := data.GetShader()
 	var codeSlice interface{}

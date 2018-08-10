@@ -35,7 +35,7 @@ func wireframe(ctx context.Context) transform.Transformer {
 		switch cmd := cmd.(type) {
 		case *VkCreateGraphicsPipelines:
 			count := uint64(cmd.CreateInfoCount())
-			infos := cmd.PCreateInfos().Slice(0, count, l)
+			infos := cmd.PCreateInfos().Slice(0, count, l, nil)
 			newInfos := make([]VkGraphicsPipelineCreateInfo, count)
 			newRasterStateDatas := make([]api.AllocResult, count)
 			for i := uint64(0); i < count; i++ {

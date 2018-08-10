@@ -16,11 +16,26 @@ package api
 
 import "github.com/google/gapid/gapis/memory"
 
-type LengthManager map[uint64]uint64
+type CommandManager map[uint64]uint64
 
-func (lm LengthManager) Slicing(p memory.Pointer, start, end uint64) {
-	v, _ := lm[p.Address()]
+func (cm CommandManager) Slicing(p memory.Pointer, start, end uint64) {
+	v, _ := cm[p.Address()]
 	if v <= end {
-		lm[p.Address()] = end
+		cm[p.Address()] = end
 	}
+}
+
+type Manager map[Cmd]CommandManager
+
+func (m Manager) Get(c Cmd) CommandManager {
+	if c == nil || m == nil {
+		return nil
+	}
+
+	cm, ok := m[c]
+	if !ok {
+		cm = CommandManager{}
+		m[c] = cm
+	}
+	return cm
 }

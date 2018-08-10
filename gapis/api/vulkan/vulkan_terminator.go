@@ -153,11 +153,11 @@ func resolveCurrentRenderPass(ctx context.Context, s *api.GlobalState, submit *V
 	}
 
 	walkCommands(c, queue.PendingCommands(), f)
-	submitInfo := submit.PSubmits().Slice(0, uint64(submit.SubmitCount()), l)
+	submitInfo := submit.PSubmits().Slice(0, uint64(submit.SubmitCount()), l, nil)
 	loopLevel := 0
 	for sub := 0; sub < int(idx[0])+getExtra(idx, loopLevel); sub++ {
 		info := submitInfo.Index(uint64(sub)).MustRead(ctx, a, s, nil)[0]
-		buffers := info.PCommandBuffers().Slice(0, uint64(info.CommandBufferCount()), l).MustRead(ctx, a, s, nil)
+		buffers := info.PCommandBuffers().Slice(0, uint64(info.CommandBufferCount()), l, nil).MustRead(ctx, a, s, nil)
 		for _, buffer := range buffers {
 			bufferObject := c.CommandBuffers().Get(buffer)
 			walkCommands(c, bufferObject.CommandReferences(), f)
@@ -167,7 +167,7 @@ func resolveCurrentRenderPass(ctx context.Context, s *api.GlobalState, submit *V
 		return lrp, subpass
 	}
 	lastInfo := submitInfo.Index(uint64(idx[0])).MustRead(ctx, a, s, nil)[0]
-	lastBuffers := lastInfo.PCommandBuffers().Slice(0, uint64(lastInfo.CommandBufferCount()), l)
+	lastBuffers := lastInfo.PCommandBuffers().Slice(0, uint64(lastInfo.CommandBufferCount()), l, nil)
 	for cmdbuffer := 0; cmdbuffer < int(idx[1])+getExtra(idx, loopLevel); cmdbuffer++ {
 		buffer := lastBuffers.Index(uint64(cmdbuffer)).MustRead(ctx, a, s, nil)[0]
 		bufferObject := c.CommandBuffers().Get(buffer)
@@ -318,7 +318,7 @@ func cutCommandBuffer(ctx context.Context, id api.CmdID,
 	l := s.MemoryLayout
 	o := a.Extras().Observations()
 	o.ApplyReads(s.Memory.ApplicationPool())
-	submitInfo := a.PSubmits().Slice(0, uint64(a.SubmitCount()), l)
+	submitInfo := a.PSubmits().Slice(0, uint64(a.SubmitCount()), l, nil)
 	skipAll := len(idx) == 0
 
 	// Notes:
@@ -343,7 +343,7 @@ func cutCommandBuffer(ctx context.Context, id api.CmdID,
 	newSubmits := submitInfo.Slice(0, lastSubmit+1).MustRead(ctx, a, s, nil)
 	newSubmits[lastSubmit].SetCommandBufferCount(uint32(lastCommandBuffer + 1))
 
-	newCommandBuffers := newSubmits[lastSubmit].PCommandBuffers().Slice(0, lastCommandBuffer+1, l).MustRead(ctx, a, s, nil)
+	newCommandBuffers := newSubmits[lastSubmit].PCommandBuffers().Slice(0, lastCommandBuffer+1, l, nil).MustRead(ctx, a, s, nil)
 
 	var lrp RenderPassObjectʳ
 	lsp := uint32(0)

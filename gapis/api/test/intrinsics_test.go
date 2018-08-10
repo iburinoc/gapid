@@ -117,10 +117,10 @@ func TestSliceCasts(t *testing.T) {
 		name        string
 		got, expect memory.Slice
 	}{
-		{"U8[]", GetState(s).U8s(), U8ᵖ(0x1234).Slice(0, 20, l)},
-		{"U16[]", GetState(s).U16s(), U16ᵖ(0x1234).Slice(0, 10, l)},
-		{"U32[]", GetState(s).U32s(), U32ᵖ(0x1234).Slice(0, 5, l)},
-		{"int[]", GetState(s).Ints(), Intᵖ(0x1234).Slice(0, 3, l)},
+		{"U8[]", GetState(s).U8s(), U8ᵖ(0x1234).Slice(0, 20, l, nil)},
+		{"U16[]", GetState(s).U16s(), U16ᵖ(0x1234).Slice(0, 10, l, nil)},
+		{"U32[]", GetState(s).U32s(), U32ᵖ(0x1234).Slice(0, 5, l, nil)},
+		{"int[]", GetState(s).Ints(), Intᵖ(0x1234).Slice(0, 3, l, nil)},
 	} {
 		assert.For(ctx, "%s.Base", test.name).That(test.got.Base()).Equals(test.expect.Base())
 		assert.For(ctx, "%s.Root", test.name).That(test.got.Root()).Equals(test.expect.Root())

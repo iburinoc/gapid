@@ -124,3 +124,7 @@ message FramebufferObservationResolvable {
 message ExpandedCommandResolvable {
   path.ExpandedCommand path = 1;
 }
+
+message ManagerResolvable {
+  path.Capture path = 1;
+}

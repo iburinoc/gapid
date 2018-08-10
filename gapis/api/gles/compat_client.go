@@ -98,7 +98,7 @@ func compatDrawElements(
 			// application pool.
 			cmd.Extras().Observations().ApplyReads(s.Memory.ApplicationPool())
 			indexSize := DataTypeSize(cmd.IndicesType())
-			data := U8ᵖ(cmd.Indices()).Slice(0, uint64(indexSize*int(cmd.IndicesCount())), s.MemoryLayout)
+			data := U8ᵖ(cmd.Indices()).Slice(0, uint64(indexSize*int(cmd.IndicesCount())), s.MemoryLayout, nil)
 			limits, ok := cmd.indexLimits()
 			if !ok {
 				limits = e.calcIndexLimits(data, indexSize)

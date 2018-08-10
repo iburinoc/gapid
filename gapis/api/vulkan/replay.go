@@ -222,7 +222,7 @@ func (t *makeAttachementReadable) Transform(ctx context.Context, id api.CmdID, c
 		pInfo := createRenderPass.PCreateInfo()
 		info := pInfo.MustRead(ctx, createRenderPass, s, nil)
 		pAttachments := info.PAttachments()
-		attachments := pAttachments.Slice(0, uint64(info.AttachmentCount()), l).MustRead(ctx, createRenderPass, s, nil)
+		attachments := pAttachments.Slice(0, uint64(info.AttachmentCount()), l, nil).MustRead(ctx, createRenderPass, s, nil)
 		changed := false
 		for i := range attachments {
 			if attachments[i].StoreOp() == VkAttachmentStoreOp_VK_ATTACHMENT_STORE_OP_DONT_CARE {
@@ -268,8 +268,8 @@ func (t *makeAttachementReadable) Transform(ctx context.Context, id api.CmdID, c
 		}
 		l := s.MemoryLayout
 		cmd.Extras().Observations().ApplyWrites(s.Memory.ApplicationPool())
-		numDev := e.PPhysicalDeviceCount().Slice(0, 1, l).MustRead(ctx, cmd, s, nil)[0]
-		devSlice := e.PPhysicalDevices().Slice(0, uint64(numDev), l)
+		numDev := e.PPhysicalDeviceCount().Slice(0, 1, l, nil).MustRead(ctx, cmd, s, nil)[0]
+		devSlice := e.PPhysicalDevices().Slice(0, uint64(numDev), l, nil)
 		devs := devSlice.MustRead(ctx, cmd, s, nil)
 		allProps := externs{ctx, cmd, id, s, nil}.fetchPhysicalDeviceProperties(e.Instance(), devSlice)
 		propList := []VkPhysicalDeviceProperties{}
